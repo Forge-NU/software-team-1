@@ -1,0 +1,35 @@
+name: "Design Review Follow-up"
+description: Action item coming out of a design review
+title: "[Design Review]: "
+labels: ["type:design-review"]
+body:
+  - type: input
+    id: review-date
+    attributes:
+      label: Design review date
+    validations:
+      required: true
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Feedback / action item
+      description: What was flagged, and what needs to change?
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: Who's taking this on?
+    validations:
+      required: false
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true

@@ -1,0 +1,54 @@
+name: "Feature / User Story"
+description: Propose new functionality to build
+title: "[Feature]: "
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for new functionality — something the product doesn't do yet.
+  - type: textarea
+    id: description
+    attributes:
+      label: What are we building?
+      description: Describe the feature and who it's for.
+      placeholder: "As a [user], I want [goal] so that [reason]."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Bullet list of what "done" looks like.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
+  - type: dropdown
+    id: estimate
+    attributes:
+      label: Effort Estimate
+      options:
+        - "S — a few hours"
+        - "M — 1-2 days"
+        - "L — a week or more"
+    validations:
+      required: false
+  - type: input
+    id: related
+    attributes:
+      label: Related issues or design docs (optional)
+    validations:
+      required: false

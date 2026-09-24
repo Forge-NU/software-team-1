@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question first
+    url: https://REPLACE-WITH-YOUR-TEAM-SLACK-CHANNEL-LINK
+    about: Not sure this is a ticket yet? Ask in Slack before opening an issue.

@@ -1,0 +1,38 @@
+name: "Task / Chore"
+description: Engineering work that isn't a new feature or a bug (refactors, infra, docs, tooling)
+title: "[Task]: "
+labels: ["type:task"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to be done, and why?
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
+  - type: dropdown
+    id: estimate
+    attributes:
+      label: Effort Estimate
+      options:
+        - "S — a few hours"
+        - "M — 1-2 days"
+        - "L — a week or more"
+    validations:
+      required: false
+  - type: input
+    id: related
+    attributes:
+      label: Related issue or PR (optional)
+    validations:
+      required: false
