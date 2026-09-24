@@ -8,31 +8,52 @@ Spotted is a mobile app that helps students in Boston find, rate, and choose the
 - **Semester:** Fall 2026
 
 ## Why This Exists
-A couple sentences on the problem and the "purpose" behind building it — who has this problem, and why it matters.
+Students constantly waste time wandering between the library, cafés, and random buildings looking for a spot that's quiet enough, not packed, and has an outlet free. Existing tools like Google Maps show a location exists but not whether it's actually usable *right now*. Spotted solves this by combining baseline location data with real-time, student-submitted updates on crowdedness, noise, and amenities.
 
 ## Tech Stack
-- Frontend:
-- Backend:
-- Database:
-- Infra/Deploy:
+- Frontend: React Native (Expo), TypeScript
+- Backend: Supabase
+- Database: Postgres (SQL for schema)
+- Infra/Deploy: Expo EAS (app builds/distribution) + Supabase Cloud (hosted backend) + GitHub Actions (CI/CD)
 
 ## Getting Started
-```
+
+### Prerequisites
+- Node.js (v20+)
+- Expo Go app on your phone ([iOS](https://apps.apple.com/app/expo-go/id982107779) / [Android](https://play.google.com/store/apps/details?id=host.exp.exponent)) — for testing on a real device
+- Supabase project access (ask Angel)
+
+### Setup
+```bash
 # clone
 git clone https://github.com/Forge-NU/software-team-1.git
-
 cd software-team-1
 
-# install
-<install command>
+# install dependencies
+npm install
 
+# set up environment variables
+cp .env.example .env
+```
+Then get the Supabase URL and anon key from Slack (or [Project Settings → API](https://supabase.com/dashboard/project/tjgrlbbozelcpyjvdbve/settings/api) if you have dashboard access) and paste them into your `.env`.
+
+```bash
 # run locally
-<run command>
+npx expo start
+```
+Scan the QR code with Expo Go, or press `i` / `a` for iOS/Android simulator.
+
+## Backend (Supabase)
+Database schema and edge functions live in `/supabase`. To pull the latest schema locally:
+```bash
+npx supabase link --project-ref tjgrlbbozelcpyjvdbve
+npx supabase db pull
 ```
 
 ## Repo Structure
 ```
-/src        - application code
+/src        - application code (screens, components, lib)
+/supabase   - database migrations, edge functions, config
 /docs       - design docs, architecture decisions
 /.github    - issue templates, PR template
 ```
