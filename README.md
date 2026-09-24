@@ -1,11 +1,11 @@
-# [Project Name]
+# Spotted
 
-One-line description of what this is and who it's for.
+Spotted is a mobile app that helps students in Boston find, rate, and choose the best spot to study based on real-time crowdedness, noise, and amenities.
 
 ## Team
-- **Project Lead:**
-- **Members:**
-- **Semester:**
+- **Project Lead:** Angel El Moucary
+- **Members:** Grace Chau, Audrey Thornal, Hari Mohanraj, Paarth Trehan, Sohum Balsara, Logan Gill, Sor Liu, Manan Gangwani
+- **Semester:** Fall 2026
 
 ## Why This Exists
 A couple sentences on the problem and the "purpose" behind building it — who has this problem, and why it matters.
@@ -19,8 +19,9 @@ A couple sentences on the problem and the "purpose" behind building it — who h
 ## Getting Started
 ```
 # clone
-git clone <repo-url>
-cd <repo-name>
+git clone https://github.com/Forge-NU/software-team-1.git
+
+cd software-team-1
 
 # install
 <install command>
