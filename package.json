@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
     "expo": "~57.0.25",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
@@ -16,7 +17,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test:backend": "deno test --config supabase/deno.json --allow-read --allow-env supabase/tests"
   },
   "private": true
 }

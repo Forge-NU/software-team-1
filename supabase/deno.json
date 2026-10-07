@@ -1,0 +1,7 @@
+{
+  "nodeModulesDir": "none",
+  "lock": false,
+  "tasks": {
+    "test": "deno test --allow-read --allow-env tests"
+  }
+}
