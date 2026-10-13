@@ -20,6 +20,7 @@ supabase/
 | `20261007013000_initial_schema.sql` | Every table from the ERD, indexes, triggers (`users` row on sign-up, `overall_ratings` recalculation) and row level security policies |
 | `20261007013100_seed_lookups.sql` | Values for the lookup tables (`location_type`, `campus`, `price_range`, `day`, `seat_type`, `capacity`, `outlet_level`, `crowd_level`, `noise_level`) |
 | `20261007013200_upsert_google_place.sql` | `upsert_google_place(jsonb)`, used by the `places` edge function to save a location, its address and hours in one transaction |
+| `20261013170000_postgis.sql` | Adds `PostGIS` and a computed `geo_location` column for distance queries |
 | `20261015161300_posts.sql` | Replaces `check_in` and `photo` with `post` and `post_photo`, the private `post-photos` bucket, and `create_post` |
 | `20261016150500_review_photos.sql` | Optional `review_photo` rows, the private `review-photos` bucket, and `attach_review_photos` |
 
