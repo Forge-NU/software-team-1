@@ -103,6 +103,16 @@ export async function listLocations(filters: { campus?: string; locationType?: s
   return data as unknown as Location[]
 }
 
+export async function getNearbyLocations(latitude: number, longitude: number, radiusMeters: number) {
+  const { data, error } = await supabase.rpc('nearby_locations', {
+    lat: latitude,
+    lon: longitude,
+    radius_m: radiusMeters,
+  }).select(LOCATION_SELECT)
+  if (error) throw error
+  return data as unknown as Location[]
+}
+
 /** Manually edits a location (admin only). A later sync overwrites name, coordinates and price. */
 export async function updateLocation(locationId: number, changes: LocationUpdate): Promise<void> {
   const { error } = await supabase.from('location').update(changes).eq('location_id', locationId)
