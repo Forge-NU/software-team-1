@@ -16,11 +16,21 @@ CREATE OR REPLACE FUNCTION public.nearby_locations(
     lat double precision,
     lon double precision,
     radius_m double precision,
-    max_results integer DEFAULT 30
+    -- Filters
+    campus_filter text DEFAULT NULL,
+    location_type_filter text DEFAULT NULL,
+    name_filter text DEFAULT NULL,
+    price_range_filter smallint DEFAULT NULL,
+    -- Pagination parameters: the coordinates and id of the last location on the previous page
+    after_latitude double precision DEFAULT NULL,
+    after_longitude double precision DEFAULT NULL,
+    after_location_id bigint DEFAULT NULL,
+    page_size integer DEFAULT 30
 )
 RETURNS SETOF public.location
 LANGUAGE plpgsql
 STABLE
+SET search_path = ''
 AS $$
 BEGIN
     -- Validate lat input
@@ -35,25 +45,46 @@ BEGIN
     IF radius_m IS NULL OR radius_m <= 0.0 THEN
         RAISE EXCEPTION 'Invalid radius: %. Must be a positive number greater than 0.', radius_m;
     END IF;
-    -- Prevent excessive results
-    IF max_results IS NULL OR max_results <= 0 THEN
-        RAISE EXCEPTION 'Invalid max_results: %. Must be a positive integer greater than 0.', max_results;
-    ELSIF max_results > 100 THEN
-        RAISE EXCEPTION 'Invalid max_results: %. Maximum allowed results per request is 100.', max_results;
+    -- Validate page_size input
+    IF page_size IS NULL OR page_size <= 0 OR page_size > 100 THEN
+        RAISE EXCEPTION 'Invalid page_size: %. Must be between 1 and 100.', page_size;
+    END IF;
+    -- Validate cursor input: either all three parts are set or none are
+    IF num_nulls(after_latitude, after_longitude, after_location_id) NOT IN (0, 3) THEN
+        RAISE EXCEPTION 'Invalid cursor: after_latitude, after_longitude and after_location_id must be set together.';
     END IF;
 
     RETURN QUERY
+    WITH query_point AS (
+        SELECT extensions.ST_SetSRID(
+            extensions.ST_MakePoint(lon, lat),
+            4326
+        )::extensions.geography AS point
+    ),
+    -- Distance of the previous page's last location, computed the same way as geo_location
+    -- so that it compares exactly with the distances below
+    anchor AS (
+        SELECT extensions.ST_SetSRID(
+            extensions.ST_MakePoint(after_longitude, after_latitude),
+            4326
+        )::extensions.geography operator(extensions.<->) query_point.point AS distance_m
+        FROM query_point
+    )
     SELECT loc.*
     FROM public.location loc
-    CROSS JOIN LATERAL (
-        SELECT extensions.ST_SetSRID(extensions.ST_MakePoint(lon, lat), 4326)::extensions.geography AS geo_location
-    ) AS loc_geo
-    WHERE extensions.ST_DWithin(
-        loc.geo_location,
-        loc_geo.geo_location,
-        radius_m
-    )
-    ORDER BY loc.geo_location operator(extensions.<->) loc_geo.geo_location ASC
-    LIMIT max_results;
+    CROSS JOIN query_point
+    CROSS JOIN anchor
+    WHERE extensions.ST_DWithin(loc.geo_location, query_point.point, radius_m)
+      AND (campus_filter IS NULL OR loc.campus = campus_filter)
+      AND (location_type_filter IS NULL OR loc.location_type = location_type_filter)
+      -- Escape LIKE wildcards so the name is matched literally
+      AND (name_filter IS NULL OR loc.name ILIKE
+           '%' || replace(replace(replace(name_filter, '\', '\\'), '%', '\%'), '_', '\_') || '%')
+      AND (price_range_filter IS NULL OR loc.price_range_id = price_range_filter)
+      AND (after_location_id IS NULL OR
+           (loc.geo_location operator(extensions.<->) query_point.point, loc.location_id)
+             > (anchor.distance_m, after_location_id))
+    ORDER BY loc.geo_location operator(extensions.<->) query_point.point, loc.location_id
+    LIMIT page_size;
 END
 $$;
