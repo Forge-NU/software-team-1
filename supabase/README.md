@@ -20,6 +20,7 @@ supabase/
 | `20261007013000_initial_schema.sql` | Every table from the ERD, indexes, triggers (`users` row on sign-up, `overall_ratings` recalculation) and row level security policies |
 | `20261007013100_seed_lookups.sql` | Values for the lookup tables (`location_type`, `campus`, `price_range`, `day`, `seat_type`, `capacity`, `outlet_level`, `crowd_level`, `noise_level`) |
 | `20261007013200_upsert_google_place.sql` | `upsert_google_place(jsonb)`, used by the `places` edge function to save a location, its address and hours in one transaction |
+| `20261015161300_posts.sql` | Replaces `check_in` and `photo` with `post` and `post_photo`, the private `post-photos` bucket, and `create_post` |
 
 ### Why the filenames look like that
 
@@ -40,6 +41,22 @@ npx supabase migration new add_something    # creates migrations/<timestamp>_add
 npx supabase db reset                       # rebuild the local database from all migrations
 npx supabase db push                        # apply new migrations to the hosted project
 ```
+
+### Posts
+
+A post is a check-in: crowd, noise and wifi live on `post`, and it is saved with at least one photo in `post_photo`. The app calls this through `src/lib/posts.ts` (`createPost`, `getPostsForLocation`, `getRecentPhotos`). Photos are objects in the private `post-photos` bucket, under `{userId}/{file}`, and the client turns those paths into signed URLs.
+
+Explore (B-5) should read posts on the location instead of `seating_area.check_in` and `seating_area.photo`:
+
+```
+post (
+  created_at, crowd_level_id, noise_level_id,
+  crowd_level ( label ), noise_level ( label ),
+  post_photo ( storage_path, created_at )
+)
+```
+
+Crowdedness is the latest post's crowd level. The photo strip signs `post_photo.storage_path` on the client. The author display name is `users.name`.
 
 ## Edge function: `places`
 
@@ -66,6 +83,6 @@ npm run test:backend
 | --- | --- |
 | `tests/places/google_test.ts` | Converting Google responses (hours, address, place type, price), and the requests sent to Google |
 | `tests/places/handler_test.ts` | Each edge function route end to end, with Google and the database faked: input validation, error codes, and the caller's login being passed through |
-| `tests/database/schema_test.ts` | The real migrations running in an in-memory Postgres ([PGlite](https://pglite.dev)): constraints, cascade deletes, the ratings trigger, row level security for anon, student and admin, and `upsert_google_place` |
+| `tests/database/schema_test.ts` | The real migrations running in an in-memory Postgres ([PGlite](https://pglite.dev)): constraints, cascade deletes, the ratings trigger, row level security for anon, student and admin, posts and the photo bucket, and `upsert_google_place` |
 
-`tests/database/db.ts` stands in for the parts of Supabase the migrations rely on (`auth.users`, `auth.uid()`, the `anon` and `authenticated` roles). Each test runs inside a transaction that is rolled back afterward, so tests don't affect each other. Use `seed(db)` for a starting admin, two students, and a location with an area and seat, and `db.as(userId)` to run a query as that user (`null` for signed out).
+`tests/database/db.ts` stands in for the parts of Supabase the migrations rely on (`auth.users`, `auth.uid()`, the `anon` and `authenticated` roles, and `storage`). Each test runs inside a transaction that is rolled back afterward, so tests don't affect each other. Use `seed(db)` for a starting admin, two students, and a location with an area and seat, and `db.as(userId)` to run a query as that user (`null` for signed out).
