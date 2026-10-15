@@ -1,4 +1,3 @@
--- One vote per user per post. The primary key enforces it.
 create table public.vote (
   post_id bigint not null references public.post (post_id) on delete cascade,
   user_id uuid not null default auth.uid() references public.users (user_id) on delete cascade,
@@ -10,7 +9,7 @@ create table public.vote (
 
 create index vote_user_id_idx on public.vote (user_id);
 
--- Blocks voting on your own post and keeps updated_at current.
+-- Blocks voting on your own post and keeps updated_at current
 create function public.handle_vote_write()
 returns trigger
 language plpgsql
@@ -51,9 +50,8 @@ create policy "Users can remove their own votes" on public.vote
 revoke all on public.vote from anon, authenticated;
 grant select, insert, update, delete on public.vote to authenticated;
 
--- Vote totals per post, plus the caller's own vote. security_invoker = false lets
--- the totals count other users' votes even though RLS hides those rows (the
--- Supabase linter will flag this; it's intentional). my_vote filters on auth.uid().
+-- Vote totals per post, plus the user's own vote. security_invoker = false lets
+-- the totals count other users' votes 
 create view public.post_vote_summary
 with (security_invoker = false) as
 select
@@ -77,7 +75,7 @@ left join (
 revoke all on public.post_vote_summary from public, anon;
 grant select on public.post_vote_summary to authenticated;
 
--- Cast (1 / -1), change, or remove (0) the caller's vote.
+-- Cast (1 / -1), change, or remove (0) the caller's vote
 create function public.cast_vote(p_post_id bigint, p_value smallint)
 returns void
 language plpgsql

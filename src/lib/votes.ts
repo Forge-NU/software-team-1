@@ -1,7 +1,8 @@
 import { supabase } from './supabase'
 import { getPostsForLocation, type Post } from './posts'
 
-export type VoteValue = 1 | -1 | 0 // 0 = remove vote
+/** 0 stands for removing a vote, other two are upvoting or downvoting */
+export type VoteValue = 1 | -1 | 0 
 
 export interface VoteSummary {
   upvotes: number
@@ -48,7 +49,7 @@ export async function getVotesForLocation(locationId: number): Promise<Map<numbe
   return summaries
 }
 
-/** getPostsForLocation plus votes. Two requests per spot, none per post. */
+/** getPostsForLocation plus votes, two requests per spot, none per post */
 export async function getPostsWithVotes(locationId: number): Promise<PostWithVotes[]> {
   const [posts, votes] = await Promise.all([
     getPostsForLocation(locationId),
