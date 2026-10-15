@@ -54,6 +54,22 @@ export interface CreatePostInput {
   photos: CreatePostPhoto[]
 }
 
+export type PostRecency = 'newest' | 'oldest'
+
+/** Derived from crowd level: Empty/Quiet, Moderate, Busy/Packed. */
+export type PostReview = 'positive' | 'negative' | 'neutral'
+
+export interface PostListOptions {
+  recency?: PostRecency
+  review?: PostReview
+}
+
+const CROWD_BY_REVIEW: Record<PostReview, number[]> = {
+  positive: [1, 2],
+  neutral: [3],
+  negative: [4, 5],
+}
+
 interface PostRow {
   post_id: number
   user_id: string
@@ -140,14 +156,21 @@ export async function createPost(input: CreatePostInput): Promise<number> {
   }
 }
 
-/** Newest first, with a signed URL for each photo and the author's display name. */
-export async function getPostsForLocation(locationId: number): Promise<Post[]> {
-  const { data, error } = await supabase
+/**
+ * Posts at a spot, with a signed URL for each photo and the author's display name.
+ * Defaults to newest first. `review` keeps only that crowd group.
+ */
+export async function getPostsForLocation(locationId: number, options: PostListOptions = {}): Promise<Post[]> {
+  const recency = options.recency ?? 'newest'
+  let query = supabase
     .from('post')
     .select(POST_SELECT)
     .eq('location_id', locationId)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: recency === 'oldest' })
     .order('created_at', { referencedTable: 'post_photo', ascending: true })
+  if (options.review) query = query.in('crowd_level_id', CROWD_BY_REVIEW[options.review])
+
+  const { data, error } = await query
   if (error) throw error
 
   const rows = (data ?? []) as unknown as PostRow[]
