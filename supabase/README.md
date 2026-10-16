@@ -21,6 +21,7 @@ supabase/
 | `20261007013100_seed_lookups.sql` | Values for the lookup tables (`location_type`, `campus`, `price_range`, `day`, `seat_type`, `capacity`, `outlet_level`, `crowd_level`, `noise_level`) |
 | `20261007013200_upsert_google_place.sql` | `upsert_google_place(jsonb)`, used by the `places` edge function to save a location, its address and hours in one transaction |
 | `20261015161300_posts.sql` | Replaces `check_in` and `photo` with `post` and `post_photo`, the private `post-photos` bucket, and `create_post` |
+| `20261016150500_review_photos.sql` | Optional `review_photo` rows, the private `review-photos` bucket, and `attach_review_photos` |
 
 ### Why the filenames look like that
 
@@ -57,6 +58,8 @@ post (
 ```
 
 Crowdedness is the latest post's crowd level. The photo strip signs `post_photo.storage_path` on the client. The author display name is `users.name`.
+
+Reviews use `src/lib/reviews.ts` (`createReview`, `getReviewsForSeating`). A review never requires a photo; when photos are included they live in the `review-photos` bucket and are linked with `attach_review_photos`.
 
 ## Edge function: `places`
 

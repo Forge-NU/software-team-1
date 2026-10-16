@@ -546,6 +546,83 @@ Deno.test('post', async (t) => {
     }))
 })
 
+Deno.test('review_photo', async (t) => {
+  const photoPath = (userId: string, file = 'review.jpg') => `${userId}/${file}`
+
+  const putReviewPhoto = (db: Parameters<Parameters<typeof withDb>[0]>[0], path: string) =>
+    db.query(`insert into storage.objects (bucket_id, name) values ('review-photos', $1)`, [path])
+
+  const attach = (
+    db: Parameters<Parameters<typeof withDb>[0]>[0],
+    actor: string | null,
+    reviewId: number,
+    paths: string[],
+  ) =>
+    db.as(actor).query(`select public.attach_review_photos($1, $2)`, [reviewId, paths])
+
+  await t.step('reviews can exist with no photos', () =>
+    withDb(async (db) => {
+      const { seatingId } = await seed(db)
+      await db.as(STUDENT).query(`insert into public.review (seating_id, overall_rating) values ($1, 4)`, [seatingId])
+      assertEquals(await db.query('select * from public.review_photo'), [])
+    }))
+
+  await t.step('attach is optional and links uploaded files to the author review', () =>
+    withDb(async (db) => {
+      const { seatingId } = await seed(db)
+      const path = photoPath(STUDENT)
+      await putReviewPhoto(db, path)
+      const [{ review_id }] = await db.as(STUDENT).query<{ review_id: number }>(
+        `insert into public.review (seating_id, overall_rating) values ($1, 5) returning review_id`,
+        [seatingId],
+      )
+      await attach(db, STUDENT, review_id, [path])
+      assertEquals(
+        await db.query(`select storage_path from public.review_photo where review_id = $1`, [review_id]),
+        [{ storage_path: path }],
+      )
+    }))
+
+  await t.step('empty paths are a no-op', () =>
+    withDb(async (db) => {
+      const { seatingId } = await seed(db)
+      const [{ review_id }] = await db.as(STUDENT).query<{ review_id: number }>(
+        `insert into public.review (seating_id, overall_rating) values ($1, 3) returning review_id`,
+        [seatingId],
+      )
+      await attach(db, STUDENT, review_id, [])
+      assertEquals(await db.query('select * from public.review_photo'), [])
+    }))
+
+  await t.step('cannot attach to someone else review or from another user folder', () =>
+    withDb(async (db) => {
+      const { seatingId } = await seed(db)
+      const [{ review_id }] = await db.as(STUDENT).query<{ review_id: number }>(
+        `insert into public.review (seating_id, overall_rating) values ($1, 3) returning review_id`,
+        [seatingId],
+      )
+      await putReviewPhoto(db, photoPath(OTHER_STUDENT))
+      await assertPgError(attach(db, OTHER_STUDENT, review_id, [photoPath(OTHER_STUDENT)]), INSUFFICIENT_PRIVILEGE)
+      await putReviewPhoto(db, photoPath(STUDENT))
+      await assertPgError(attach(db, STUDENT, review_id, [photoPath(OTHER_STUDENT)]), INSUFFICIENT_PRIVILEGE)
+      assertEquals(await db.query('select * from public.review_photo'), [])
+    }))
+
+  await t.step('deleting a review removes its photos', () =>
+    withDb(async (db) => {
+      const { seatingId } = await seed(db)
+      const path = photoPath(STUDENT)
+      await putReviewPhoto(db, path)
+      const [{ review_id }] = await db.as(STUDENT).query<{ review_id: number }>(
+        `insert into public.review (seating_id, overall_rating) values ($1, 2) returning review_id`,
+        [seatingId],
+      )
+      await attach(db, STUDENT, review_id, [path])
+      await db.as(STUDENT).query(`delete from public.review where review_id = $1`, [review_id])
+      assertEquals(await db.query('select * from public.review_photo'), [])
+    }))
+})
+
 Deno.test('flag', async (t) => {
   await t.step('must target something, and at most one of review or photo', () =>
     withDb(async (db) => {
