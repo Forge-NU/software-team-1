@@ -50,6 +50,25 @@ npx supabase link --project-ref tjgrlbbozelcpyjvdbve
 npx supabase db pull
 ```
 
+To apply the schema in `supabase/migrations` to the linked project:
+```bash
+npx supabase db push
+```
+
+### Google Places
+Location data is imported from the Google Places API (New) by the `places` edge function, so the API key never ships in the app. Importing and syncing places requires a `users` row with `user_type = 'admin'` (set it from the Supabase dashboard).
+
+```bash
+# deploy
+npx supabase secrets set GOOGLE_PLACES_API_KEY=your-key
+npx supabase functions deploy places
+
+# run locally (copy supabase/functions/.env.example to supabase/functions/.env first)
+npx supabase functions serve places
+```
+
+Use the helpers in `src/lib/places.ts` from the app: `searchPlaces`, `importPlace`, `syncLocation`, `getLocation`, `listLocations`, `updateLocation`, `deleteLocation`.
+
 ## Repo Structure
 ```
 /src        - application code (screens, components, lib)
