@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@1'
-import { type CheckInRow, type LocationRow, rankSpots } from '../../../src/lib/exploreRanking.ts'
+import { type LocationRow, type PostRow, rankSpots } from '../../../src/lib/exploreRanking.ts'
 
 const NOW = new Date('2026-10-13T15:00:00Z')
 const HERE = { latitude: 42.3381, longitude: -71.0881, radiusMeters: 2000, now: NOW }
@@ -8,13 +8,15 @@ const NOISE = ['', 'Silent', 'Quiet', 'Moderate', 'Loud', 'Very loud']
 
 let nextId = 1
 
-function checkIn(minutesAgo: number, crowd: number, noise: number | null): CheckInRow {
+function post(minutesAgo: number, crowd: number, noise: number | null, photo = 'photo.jpg'): PostRow {
+  const created_at = new Date(NOW.getTime() - minutesAgo * 60_000).toISOString()
   return {
-    checked_in_at: new Date(NOW.getTime() - minutesAgo * 60_000).toISOString(),
+    created_at,
     crowd_level_id: crowd,
     noise_level_id: noise,
     crowd_level: { label: CROWD[crowd] },
     noise_level: noise ? { label: NOISE[noise] } : null,
+    post_photo: [{ storage_path: photo, created_at }],
   }
 }
 
@@ -29,8 +31,7 @@ function spot(
     capacity?: number
     seatType?: string
     noisePolicy?: string
-    checkIns?: CheckInRow[]
-    photos?: { image_url: string; created_at: string }[]
+    posts?: PostRow[]
   } = {},
 ): LocationRow {
   return {
@@ -47,9 +48,8 @@ function spot(
       seat_type: opts.seatType ?? 'table',
       capacity_id: opts.capacity ?? 1,
       outlet_level_id: opts.outlets ?? 0,
-      check_in: opts.checkIns ?? [],
-      photo: opts.photos ?? [],
     }],
+    post: opts.posts ?? [],
   }
 }
 
@@ -58,11 +58,11 @@ const names = (spots: { name: string }[]) => spots.map((s) => s.name)
 Deno.test('rankSpots', async (t) => {
   await t.step('quiet + chargers returns only matching spots', () => {
     const rows = [
-      spot('Quiet Cafe', { outlets: 3, checkIns: [checkIn(10, 2, 2)] }),
-      spot('Loud Cafe', { outlets: 3, checkIns: [checkIn(10, 2, 4)] }),
-      spot('No Outlets', { outlets: 0, checkIns: [checkIn(10, 1, 1)] }),
+      spot('Quiet Cafe', { outlets: 3, posts: [post(10, 2, 2)] }),
+      spot('Loud Cafe', { outlets: 3, posts: [post(10, 2, 4)] }),
+      spot('No Outlets', { outlets: 0, posts: [post(10, 1, 1)] }),
       spot('Policy Quiet', { outlets: 2, noisePolicy: 'Quiet study' }),
-      spot('Policy Quiet But Loud Now', { outlets: 2, noisePolicy: 'Quiet study', checkIns: [checkIn(10, 2, 5)] }),
+      spot('Policy Quiet But Loud Now', { outlets: 2, noisePolicy: 'Quiet study', posts: [post(10, 2, 5)] }),
       spot('Unknown Noise', { outlets: 3 }),
     ]
     const result = rankSpots(rows, { ...HERE, filters: { quiet: true, chargers: true } })
@@ -70,16 +70,16 @@ Deno.test('rankSpots', async (t) => {
   })
 
   await t.step('a 3-hour-old packed post is not current', () => {
-    const [result] = rankSpots([spot('Snell', { checkIns: [checkIn(180, 5, 5)] })], HERE)
+    const [result] = rankSpots([spot('Snell', { posts: [post(180, 5, 5)] })], HERE)
     assertEquals(result.is_current, false)
     assertEquals(result.crowd_level, null)
     assertEquals(result.noise_level, null)
-    assertEquals(result.last_updated_at, checkIn(180, 5, 5).checked_in_at)
+    assertEquals(result.last_updated_at, post(180, 5, 5).created_at)
   })
 
   await t.step('latest recent post wins and spots without posts still appear', () => {
     const rows = [
-      spot('Snell', { lat: 42.3381, lng: -71.0881, checkIns: [checkIn(60, 5, 5), checkIn(5, 2, 1)] }),
+      spot('Snell', { lat: 42.3381, lng: -71.0881, posts: [post(60, 5, 5), post(5, 2, 1)] }),
       spot('Empty Cafe'),
     ]
     const result = rankSpots(rows, HERE)
@@ -91,8 +91,8 @@ Deno.test('rankSpots', async (t) => {
 
   await t.step('best options ranks uncrowded fresh spots above packed or stale ones', () => {
     const rows = [
-      spot('Packed', { lat: 42.3381, lng: -71.0881, checkIns: [checkIn(5, 5, 4)] }),
-      spot('Calm', { lat: 42.342, lng: -71.092, checkIns: [checkIn(5, 1, 1)] }),
+      spot('Packed', { lat: 42.3381, lng: -71.0881, posts: [post(5, 5, 4)] }),
+      spot('Calm', { lat: 42.342, lng: -71.092, posts: [post(5, 1, 1)] }),
       spot('Unknown', { lat: 42.3382, lng: -71.0882 }),
     ]
     assertEquals(names(rankSpots(rows, HERE)), ['Calm', 'Packed', 'Unknown'])
@@ -106,10 +106,7 @@ Deno.test('rankSpots', async (t) => {
         type: 'library',
         price: 0,
         seatType: 'study_room',
-        photos: [
-          { image_url: 'old.jpg', created_at: '2026-10-11T12:00:00Z' },
-          { image_url: 'new.jpg', created_at: '2026-10-12T12:00:00Z' },
-        ],
+        posts: [post(3000, 3, 3, 'old.jpg'), post(1500, 3, 3, 'new.jpg')],
       }),
       spot('Tatte', { price: 2, capacity: 1 }),
       spot('No Price'),
@@ -119,6 +116,6 @@ Deno.test('rankSpots', async (t) => {
     assertEquals(names(rankSpots(rows, { ...HERE, filters: { priceRangeIds: [0, 1] } })), ['Snell'])
     assertEquals(names(rankSpots(rows, { ...HERE, filters: { groupStudy: true } })), ['Snell'])
     assertEquals(rankSpots(rows, { ...HERE, limit: 1 }).length, 1)
-    assertEquals(rankSpots(rows, { ...HERE, filters: { locationTypes: ['library'] } })[0].latest_photo_url, 'new.jpg')
+    assertEquals(rankSpots(rows, { ...HERE, filters: { locationTypes: ['library'] } })[0].latest_photo_path, 'new.jpg')
   })
 })

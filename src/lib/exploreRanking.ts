@@ -20,12 +20,13 @@ export interface RankOptions {
   now?: Date
 }
 
-export interface CheckInRow {
-  checked_in_at: string
+export interface PostRow {
+  created_at: string
   crowd_level_id: number
   noise_level_id: number | null
   crowd_level: { label: string } | null
   noise_level: { label: string } | null
+  post_photo: { storage_path: string; created_at: string }[]
 }
 
 export interface LocationRow {
@@ -42,9 +43,8 @@ export interface LocationRow {
     seat_type: string
     capacity_id: number
     outlet_level_id: number
-    check_in: CheckInRow[]
-    photo: { image_url: string; created_at: string }[]
   }[]
+  post: PostRow[]
 }
 
 export interface ExploreSpot {
@@ -64,8 +64,10 @@ export interface ExploreSpot {
   crowd_level: string | null
   noise_level_id: number | null
   noise_level: string | null
-  /** Most recent check-in, even if it is no longer current. */
+  /** Most recent post, even if it is no longer current. */
   last_updated_at: string | null
+  /** Path in the private post-photos bucket; exploreSpots signs it into latest_photo_url. */
+  latest_photo_path: string | null
   latest_photo_url: string | null
   score: number
 }
@@ -86,15 +88,15 @@ function latest<T>(items: T[], time: (item: T) => string): T | null {
 
 /**
  * Filter definitions:
- *   quiet        latest current check-in is Silent/Quiet (<= 2); with no current noise
+ *   quiet        latest current post is Silent/Quiet (<= 2); with no current noise
  *                report, an area whose noise_policy mentions quiet or silent
  *   groupStudy   a seating area for 2+ people, or a study room
  *   chargers     a seating area with Some or Plenty outlets (>= 2)
  *   price        locations with unknown price are excluded
  *
- * "Current" means a check-in within RECENT_MINUTES; the latest one wins.
+ * "Current" means a post within RECENT_MINUTES; the latest one wins.
  * 'best' scores lower crowd (50%), freshness (20%) and closeness (30%), so spots without
- * a current check-in only score on closeness. 'distance' is nearest first.
+ * a current post only score on closeness. 'distance' is nearest first.
  */
 export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[] {
   const f = opts.filters ?? {}
@@ -110,12 +112,9 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
     if (f.groupStudy && !row.seating_area.some((s) => s.capacity_id >= 2 || s.seat_type === 'study_room')) continue
     if (f.chargers && !row.seating_area.some((s) => s.outlet_level_id >= 2)) continue
 
-    const checkIn = latest(
-      row.seating_area.flatMap((s) => s.check_in).filter((c) => Date.parse(c.checked_in_at) <= now),
-      (c) => c.checked_in_at,
-    )
-    const age = checkIn ? now - Date.parse(checkIn.checked_in_at) : Infinity
-    const current = checkIn && age < windowMs ? checkIn : null
+    const post = latest(row.post.filter((p) => Date.parse(p.created_at) <= now), (p) => p.created_at)
+    const age = post ? now - Date.parse(post.created_at) : Infinity
+    const current = post && age < windowMs ? post : null
 
     if (f.quiet) {
       const quietPolicy = row.area.some((a) => /quiet|silent/i.test(a.noise_policy ?? ''))
@@ -123,7 +122,7 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
       if (noise == null ? !quietPolicy : noise > 2) continue
     }
 
-    const photo = latest(row.seating_area.flatMap((s) => s.photo), (p) => p.created_at)
+    const photo = latest(row.post.flatMap((p) => p.post_photo), (p) => p.created_at)
     const score =
       0.3 * (1 - distance / Math.max(opts.radiusMeters, 1)) +
       (current ? (0.5 * (5 - current.crowd_level_id)) / 4 + 0.2 * (1 - age / windowMs) : 0)
@@ -144,8 +143,9 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
       crowd_level: current?.crowd_level?.label ?? null,
       noise_level_id: current?.noise_level_id ?? null,
       noise_level: current?.noise_level?.label ?? null,
-      last_updated_at: checkIn?.checked_in_at ?? null,
-      latest_photo_url: photo?.image_url ?? null,
+      last_updated_at: post?.created_at ?? null,
+      latest_photo_path: photo?.storage_path ?? null,
+      latest_photo_url: null,
       score,
     })
   }

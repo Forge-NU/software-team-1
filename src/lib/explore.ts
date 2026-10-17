@@ -13,14 +13,17 @@ export interface ExploreParams {
   limit?: number
 }
 
+const PHOTO_BUCKET = 'post-photos'
+const SIGNED_URL_SECONDS = 60 * 60
+
 const EXPLORE_SELECT = `
   location_id, name, location_type, campus, price_range_id, latitude, longitude,
   address ( street_one, city ),
   area ( noise_policy ),
-  seating_area (
-    seat_type, capacity_id, outlet_level_id,
-    check_in ( checked_in_at, crowd_level_id, noise_level_id, crowd_level ( label ), noise_level ( label ) ),
-    photo ( image_url, created_at )
+  seating_area ( seat_type, capacity_id, outlet_level_id ),
+  post (
+    created_at, crowd_level_id, noise_level_id, crowd_level ( label ), noise_level ( label ),
+    post_photo ( storage_path, created_at )
   )
 `
 
@@ -39,11 +42,12 @@ export async function exploreSpots(params: ExploreParams): Promise<ExploreSpot[]
     .lte('latitude', params.latitude + dLat)
     .gte('longitude', params.longitude - dLng)
     .lte('longitude', params.longitude + dLng)
-    // Only the latest check-in and photo per seating area are needed.
-    .order('checked_in_at', { referencedTable: 'seating_area.check_in', ascending: false })
-    .limit(1, { referencedTable: 'seating_area.check_in' })
-    .order('created_at', { referencedTable: 'seating_area.photo', ascending: false })
-    .limit(1, { referencedTable: 'seating_area.photo' })
+    // Only the latest post and its newest photo are needed. Every post has a photo,
+    // so that is also the location's latest photo.
+    .order('created_at', { referencedTable: 'post', ascending: false })
+    .limit(1, { referencedTable: 'post' })
+    .order('created_at', { referencedTable: 'post.post_photo', ascending: false })
+    .limit(1, { referencedTable: 'post.post_photo' })
 
   if (f.locationTypes?.length) query = query.in('location_type', f.locationTypes)
   if (f.priceRangeIds?.length) query = query.in('price_range_id', f.priceRangeIds)
@@ -52,5 +56,14 @@ export async function exploreSpots(params: ExploreParams): Promise<ExploreSpot[]
 
   const { data, error } = await query
   if (error) throw error
-  return rankSpots(data as unknown as LocationRow[], { ...params, radiusMeters })
+  const spots = rankSpots(data as unknown as LocationRow[], { ...params, radiusMeters })
+
+  const paths = spots.flatMap((s) => (s.latest_photo_path ? [s.latest_photo_path] : []))
+  if (paths.length === 0) return spots
+  const { data: signed, error: signError } = await supabase.storage
+    .from(PHOTO_BUCKET)
+    .createSignedUrls(paths, SIGNED_URL_SECONDS)
+  if (signError) throw signError
+  const urls = new Map(signed.map((item) => [item.path, item.signedUrl]))
+  return spots.map((s) => ({ ...s, latest_photo_url: s.latest_photo_path ? urls.get(s.latest_photo_path) ?? null : null }))
 }
