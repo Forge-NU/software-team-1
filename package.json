@@ -24,7 +24,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test:backend": "deno test --config supabase/deno.json --allow-read --allow-env supabase/tests"
+    "test:backend": "deno test --config supabase/deno.json --allow-read --allow-env supabase/tests",
+    "import:osm": "deno run --config supabase/deno.json --allow-net --allow-env --allow-read --allow-write supabase/scripts/import_osm.ts"
   },
   "private": true
 }

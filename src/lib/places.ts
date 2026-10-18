@@ -37,6 +37,9 @@ export interface DayHours {
 export interface Location {
   location_id: number
   google_place_id: string | null
+  /** Set when imported from OpenStreetMap; such locations must be credited "© OpenStreetMap contributors". */
+  osm_type: 'node' | 'way' | 'relation' | null
+  osm_id: number | null
   name: string
   latitude: number
   longitude: number
@@ -65,7 +68,7 @@ export type LocationUpdate = Partial<
 >
 
 const LOCATION_SELECT = `
-  location_id, google_place_id, name, latitude, longitude, location_type, campus, price_range_id,
+  location_id, google_place_id, osm_type, osm_id, name, latitude, longitude, location_type, campus, price_range_id,
   address ( street_one, street_two, city, region, postal_code, country_code ),
   day_hours ( day, open_time, close_time )
 `
