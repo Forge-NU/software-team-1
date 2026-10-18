@@ -909,3 +909,142 @@ Deno.test('upsert_google_place', async (t) => {
       await assertPgError(upsert(db, ADMIN, { ...place, campus: 'Hogwarts' }), FOREIGN_KEY)
     }))
 })
+
+Deno.test('nearby_locations', async (t) => {
+  type DbArg = Parameters<Parameters<typeof withDb>[0]>[0]
+  const RAISE = 'P0001'
+  // Snell Library. 0.001 degrees of latitude is about 111 m.
+  const here = { lat: 42.338, lon: -71.088 }
+
+  const insert = async (db: DbArg, name: string, latitude: number, fields: Record<string, unknown> = {}) => {
+    const row = { name, latitude, longitude: here.lon, location_type: 'cafe', ...fields }
+    const cols = Object.keys(row)
+    const [{ location_id }] = await db.query<{ location_id: number }>(
+      `insert into public.location (${cols.join(', ')}) values (${cols.map((_, i) => `$${i + 1}`).join(', ')})
+       returning location_id`,
+      Object.values(row),
+    )
+    return location_id
+  }
+
+  const nearby = (db: DbArg, args: Record<string, unknown> = {}) => {
+    const all = { lat: here.lat, lon: here.lon, radius_m: 500, ...args }
+    const keys = Object.keys(all)
+    return db.as(null).query<{ location_id: number; name: string; latitude: number; longitude: number }>(
+      `select location_id, name, latitude, longitude
+       from public.nearby_locations(${keys.map((k, i) => `${k} => $${i + 1}`).join(', ')})`,
+      Object.values(all),
+    )
+  }
+  const names = async (db: DbArg, args: Record<string, unknown> = {}) => (await nearby(db, args)).map((r) => r.name)
+
+  await t.step('geo_location is computed from latitude and longitude', () =>
+    withDb(async (db) => {
+      const id = await insert(db, 'Cafe', 42.3)
+      const point = (sql: string) =>
+        db.query<{ lat: number; lon: number }>(sql, [id]).then(([r]) => r)
+      const select = `select extensions.ST_Y(geo_location::extensions.geometry) as lat,
+                             extensions.ST_X(geo_location::extensions.geometry) as lon
+                      from public.location where location_id = $1`
+      assertEquals(await point(select), { lat: 42.3, lon: here.lon })
+      await db.query(`update public.location set latitude = 40, longitude = -70 where location_id = $1`, [id])
+      assertEquals(await point(select), { lat: 40, lon: -70 })
+    }))
+
+  await t.step('returns locations within the radius, nearest first', () =>
+    withDb(async (db) => {
+      await insert(db, 'Far', 42.348) // ~1.1 km
+      await insert(db, 'Mid', 42.340) // ~222 m
+      await insert(db, 'Here', 42.338)
+      await insert(db, 'Near', 42.339) // ~111 m
+      assertEquals(await names(db), ['Here', 'Near', 'Mid'])
+      assertEquals(await names(db, { radius_m: 150 }), ['Here', 'Near'])
+      assertEquals(await names(db, { radius_m: 2000 }), ['Here', 'Near', 'Mid', 'Far'])
+    }))
+
+  await t.step('breaks distance ties by location_id', () =>
+    withDb(async (db) => {
+      const ids = [await insert(db, 'A', 42.339), await insert(db, 'B', 42.339), await insert(db, 'C', 42.339)]
+      assertEquals((await nearby(db)).map((r) => r.location_id), ids)
+    }))
+
+  await t.step('filters by campus, location type, price range and name', () =>
+    withDb(async (db) => {
+      await insert(db, 'Snell Library', 42.338, { location_type: 'library', campus: 'Northeastern University' })
+      await insert(db, 'Tatte Bakery', 42.339, { campus: 'Northeastern University', price_range_id: 2 })
+      await insert(db, 'Pavement', 42.340, { campus: 'MIT', price_range_id: 1 })
+
+      assertEquals(await names(db, { campus_filter: 'Northeastern University' }), ['Snell Library', 'Tatte Bakery'])
+      assertEquals(await names(db, { location_type_filter: 'cafe' }), ['Tatte Bakery', 'Pavement'])
+      assertEquals(await names(db, { price_range_filter: 1 }), ['Pavement'])
+      assertEquals(await names(db, { name_filter: 'LIBR' }), ['Snell Library'])
+      assertEquals(
+        await names(db, { campus_filter: 'Northeastern University', location_type_filter: 'cafe', price_range_filter: 2 }),
+        ['Tatte Bakery'],
+      )
+      assertEquals(await names(db, { campus_filter: 'MIT', location_type_filter: 'library' }), [])
+    }))
+
+  await t.step('name filter matches LIKE wildcards literally', () =>
+    withDb(async (db) => {
+      await insert(db, '100% Cafe', 42.338)
+      await insert(db, '100 Cafe', 42.338)
+      await insert(db, 'Cafe_One', 42.339)
+      await insert(db, 'CafeXOne', 42.339)
+      await insert(db, 'Back\\slash', 42.340)
+      await insert(db, 'Backslash', 42.340)
+      assertEquals(await names(db, { name_filter: '%' }), ['100% Cafe'])
+      assertEquals(await names(db, { name_filter: '_' }), ['Cafe_One'])
+      assertEquals(await names(db, { name_filter: '\\' }), ['Back\\slash'])
+    }))
+
+  await t.step('the cursor continues after the previous page without gaps or duplicates', () =>
+    withDb(async (db) => {
+      // Three at the same distance so a page boundary falls inside a tie.
+      for (const [name, lat] of [['A', 42.338], ['B', 42.339], ['C', 42.339], ['D', 42.339], ['E', 42.340]] as const) {
+        await insert(db, name, lat)
+      }
+      const everything = await names(db)
+      assertEquals(everything.length, 5)
+
+      const seen: string[] = []
+      let after: { after_latitude: number; after_longitude: number; after_location_id: number } | undefined
+      for (let i = 0; i < 10; i++) {
+        const page = await nearby(db, { page_size: 2, ...after })
+        if (page.length === 0) break
+        seen.push(...page.map((r) => r.name))
+        const last = page[page.length - 1]
+        after = { after_latitude: last.latitude, after_longitude: last.longitude, after_location_id: last.location_id }
+      }
+      assertEquals(seen, everything)
+    }))
+
+  await t.step('page_size limits the number of rows', () =>
+    withDb(async (db) => {
+      for (let i = 0; i < 5; i++) await insert(db, `Cafe ${i}`, 42.338)
+      assertEquals((await nearby(db, { page_size: 3 })).length, 3)
+      assertEquals((await nearby(db)).length, 5)
+    }))
+
+  await t.step('rejects invalid input', () =>
+    withDb(async (db) => {
+      for (
+        const args of [
+          { lat: 91 },
+          { lat: -91 },
+          { lat: null },
+          { lon: 181 },
+          { lon: -181 },
+          { radius_m: 0 },
+          { radius_m: -5 },
+          { page_size: 0 },
+          { page_size: 101 },
+          { after_location_id: 1 },
+          { after_latitude: 42, after_longitude: -71 },
+        ]
+      ) {
+        await assertPgError(nearby(db, args), RAISE)
+      }
+      await nearby(db, { lat: 90, lon: -180, page_size: 100 })
+    }))
+})

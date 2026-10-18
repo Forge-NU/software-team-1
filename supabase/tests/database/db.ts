@@ -1,9 +1,10 @@
 // In-memory Postgres (PGlite) with the real migrations applied, for schema tests.
 // Stubs the pieces of Supabase the migrations depend on: the anon/authenticated
-// roles, auth.users, auth.uid(), storage.buckets/objects, and the default grants
-// Supabase gives those roles.
+// roles, auth.users, auth.uid(), storage.buckets/objects, the extensions schema and the default
+// grants Supabase gives those roles.
 
-import { PGlite } from 'npm:@electric-sql/pglite@0.3'
+import { PGlite } from 'npm:@electric-sql/pglite@0.5.8'
+import { postgis } from 'npm:@electric-sql/pglite-postgis@0.2.8'
 
 export const ADMIN = '00000000-0000-0000-0000-00000000000a'
 export const STUDENT = '00000000-0000-0000-0000-00000000000b'
@@ -13,6 +14,8 @@ const SUPABASE_STUBS = `
   create role anon nologin;
   create role authenticated nologin;
   create schema auth;
+  create schema extensions;
+  grant usage on schema extensions to anon, authenticated;
   grant usage on schema auth to anon, authenticated;
   create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb);
   create function auth.uid() returns uuid language sql stable as
@@ -58,7 +61,7 @@ const SUPABASE_STUBS = `
 `
 
 async function createDatabase(): Promise<PGlite> {
-  const pg = new PGlite()
+  const pg = new PGlite({ extensions: { postgis } })
   await pg.exec(SUPABASE_STUBS)
   const dir = new URL('../../migrations/', import.meta.url)
   const files = [...Deno.readDirSync(dir)].map((e) => e.name).filter((n) => n.endsWith('.sql')).sort()
