@@ -19,7 +19,7 @@ Deno.test('lookup data is seeded', () =>
     ]) {
       assertEquals((await count(table)) > 0, true, `${table} is empty`)
     }
-    // google.ts maps Google types onto these names.
+    // scripts/osm/overpass.ts maps OSM tags onto these names.
     const types = (await db.query<{ name: string }>('select name from public.location_type')).map((r) => r.name)
     for (const t of ['library', 'cafe', 'coworking', 'campus_building', 'park', 'restaurant', 'other']) {
       assertEquals(types.includes(t), true, `missing location_type ${t}`)
@@ -127,10 +127,11 @@ Deno.test('location', async (t) => {
       await db.query(...insert({ campus: 'MIT', price_range_id: 2 }))
     }))
 
-  await t.step('google_place_id is unique', () =>
+  await t.step('google_place_id is unique, and the Google import function is gone', () =>
     withDb(async (db) => {
       await db.query(...insert({ google_place_id: 'ChIJ1' }))
       await assertPgError(db.query(...insert({ google_place_id: 'ChIJ1' })), UNIQUE)
+      assertEquals(await db.query(`select to_regprocedure('public.upsert_google_place(jsonb)') as fn`), [{ fn: null }])
     }))
 
   await t.step('address country_code must be two uppercase letters', () =>
@@ -784,129 +785,6 @@ Deno.test('row level security', async (t) => {
       )
       assertEquals((await db.as(ADMIN).query(`delete from public.review returning 1`)).length, 1)
       assertEquals((await db.as(ADMIN).query(`delete from public.post returning 1`)).length, 1)
-    }))
-})
-
-Deno.test('upsert_google_place', async (t) => {
-  const place = {
-    google_place_id: 'ChIJsnell',
-    name: 'Snell Library',
-    latitude: 42.338,
-    longitude: -71.088,
-    default_location_type: 'library',
-    location_type: null,
-    campus: 'Northeastern University',
-    price_range_id: 0,
-    address: {
-      street_one: '360 Huntington Ave',
-      street_two: null,
-      city: 'Boston',
-      region: 'MA',
-      postal_code: '02115',
-      country_code: 'US',
-    },
-    hours: [
-      { day: 'Monday', open_time: '00:00', close_time: '24:00' },
-      { day: 'Friday', open_time: '08:00', close_time: '02:00' },
-    ],
-  }
-  const upsert = (db: Parameters<Parameters<typeof withDb>[0]>[0], actor: string | null, payload: unknown) =>
-    db.as(actor).query<{ id: number }>('select public.upsert_google_place($1) as id', [payload])
-
-  await t.step('only admins can import', () =>
-    withDb(async (db) => {
-      await seed(db)
-      await assertPgError(upsert(db, null, place), INSUFFICIENT_PRIVILEGE)
-      await assertPgError(upsert(db, STUDENT, place), INSUFFICIENT_PRIVILEGE)
-    }))
-
-  await t.step('creates a location with address and hours', () =>
-    withDb(async (db) => {
-      await seed(db)
-      const [{ id }] = await upsert(db, ADMIN, place)
-
-      assertEquals(
-        await db.query(
-          `select name, location_type, campus, price_range_id from public.location where location_id = $1`,
-          [id],
-        ),
-        [{ name: 'Snell Library', location_type: 'library', campus: 'Northeastern University', price_range_id: 0 }],
-      )
-      assertEquals(await db.query(`select city, country_code from public.address where location_id = $1`, [id]), [
-        { city: 'Boston', country_code: 'US' },
-      ])
-      assertEquals(
-        await db.query(`select day, open_time, close_time from public.day_hours where location_id = $1 order by day`, [
-          id,
-        ]),
-        [
-          { day: 'Friday', open_time: '08:00:00', close_time: '02:00:00' },
-          { day: 'Monday', open_time: '00:00:00', close_time: '24:00:00' },
-        ],
-      )
-    }))
-
-  await t.step('re-importing updates Google fields but keeps manual classification', () =>
-    withDb(async (db) => {
-      await seed(db)
-      const [{ id }] = await upsert(db, ADMIN, place)
-      await db.as(ADMIN).query(`update public.location set location_type = 'campus_building' where location_id = $1`, [id])
-
-      const [{ id: again }] = await upsert(db, ADMIN, {
-        ...place,
-        name: 'Snell Library (renamed)',
-        campus: null,
-        price_range_id: null,
-        address: { ...place.address, street_one: '1 New St' },
-        hours: [{ day: 'Tuesday', open_time: '09:00', close_time: '17:00' }],
-      })
-
-      assertEquals(again, id)
-      assertEquals(
-        await db.query(`select name, location_type, campus, price_range_id from public.location where location_id = $1`, [
-          id,
-        ]),
-        [{ name: 'Snell Library (renamed)', location_type: 'campus_building', campus: 'Northeastern University', price_range_id: null }],
-      )
-      assertEquals(await db.query(`select street_one from public.address where location_id = $1`, [id]), [
-        { street_one: '1 New St' },
-      ])
-      assertEquals(await db.query(`select day from public.day_hours where location_id = $1`, [id]), [{ day: 'Tuesday' }])
-    }))
-
-  await t.step('explicit overrides replace the classification', () =>
-    withDb(async (db) => {
-      await seed(db)
-      const [{ id }] = await upsert(db, ADMIN, place)
-      await upsert(db, ADMIN, { ...place, location_type: 'coworking', campus: 'MIT' })
-      assertEquals(await db.query(`select location_type, campus from public.location where location_id = $1`, [id]), [
-        { location_type: 'coworking', campus: 'MIT' },
-      ])
-    }))
-
-  await t.step('missing hours or address leaves existing data alone', () =>
-    withDb(async (db) => {
-      await seed(db)
-      const [{ id }] = await upsert(db, ADMIN, place)
-      await upsert(db, ADMIN, { ...place, hours: null, address: null })
-      assertEquals((await db.query(`select * from public.day_hours where location_id = $1`, [id])).length, 2)
-      assertEquals((await db.query(`select * from public.address where location_id = $1`, [id])).length, 1)
-    }))
-
-  await t.step('falls back to other when no type is given', () =>
-    withDb(async (db) => {
-      await seed(db)
-      const [{ id }] = await upsert(db, ADMIN, { ...place, default_location_type: null })
-      assertEquals(await db.query(`select location_type from public.location where location_id = $1`, [id]), [
-        { location_type: 'other' },
-      ])
-    }))
-
-  await t.step('rejects unknown location types and campuses', () =>
-    withDb(async (db) => {
-      await seed(db)
-      await assertPgError(upsert(db, ADMIN, { ...place, location_type: 'spaceship' }), FOREIGN_KEY)
-      await assertPgError(upsert(db, ADMIN, { ...place, campus: 'Hogwarts' }), FOREIGN_KEY)
     }))
 })
 

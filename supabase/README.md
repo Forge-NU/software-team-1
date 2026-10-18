@@ -7,11 +7,9 @@ supabase/
   config.toml          local Supabase settings (used by `supabase start`)
   deno.json            Deno settings for running the tests
   migrations/          database schema, applied in filename order
-  functions/places/    edge function for the Google Places API (being replaced by OpenStreetMap)
   scripts/             one-off scripts, e.g. importing places from OpenStreetMap
   tests/
     database/          schema tests against the real migrations
-    places/            edge function tests
     osm/               OpenStreetMap importer tests
     lib/               app client (src/lib) tests
 ```
@@ -22,11 +20,12 @@ supabase/
 | --- | --- |
 | `20261007013000_initial_schema.sql` | Every table from the ERD, indexes, triggers (`users` row on sign-up, `overall_ratings` recalculation) and row level security policies |
 | `20261007013100_seed_lookups.sql` | Values for the lookup tables (`location_type`, `campus`, `price_range`, `day`, `seat_type`, `capacity`, `outlet_level`, `crowd_level`, `noise_level`) |
-| `20261007013200_upsert_google_place.sql` | `upsert_google_place(jsonb)`, used by the `places` edge function to save a location, its address and hours in one transaction |
+| `20261007013200_upsert_google_place.sql` | `upsert_google_place(jsonb)`, used by the former Google Places edge function (dropped in `20261018130000`) |
 | `20261013170000_postgis.sql` | Adds `PostGIS` and a computed `geo_location` column for distance queries |
 | `20261015161300_posts.sql` | Replaces `check_in` and `photo` with `post` and `post_photo`, the private `post-photos` bucket, and `create_post` |
 | `20261016150500_review_photos.sql` | Optional `review_photo` rows, the private `review-photos` bucket, and `attach_review_photos` |
 | `20261018120000_openstreetmap.sql` | `osm_type`/`osm_id` on `location`, and `upsert_osm_places(jsonb)`, used by the OpenStreetMap import script to save locations, addresses and hours in one transaction |
+| `20261018130000_drop_google_places.sql` | Drops `upsert_google_place`. `google_place_id` is kept for locations imported before the switch |
 
 ### Why the filenames look like that
 
@@ -36,7 +35,7 @@ The schema is split by purpose so each file is easy to review:
 
 - **Schema** is the table structure and rules.
 - **Seed lookups** is reference data. It lives in a migration rather than `seed.sql` because `seed.sql` only runs locally on `supabase db reset`, and production needs these rows too.
-- **Upsert Google place** is only needed by the Places integration.
+- **Upsert Google place** was only needed by the Google Places integration, which has been removed.
 
 ### Changing the schema
 
@@ -68,7 +67,7 @@ Reviews use `src/lib/reviews.ts` (`createReview`, `getReviewsForSeating`). A rev
 
 ## Importing places from OpenStreetMap
 
-`scripts/import_osm.ts` fetches libraries, cafes, coworking spaces and campus buildings around Boston from the [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) and saves them with `upsert_osm_places`. It replaces importing from Google Places, whose terms don't allow keeping place details in our own database.
+`scripts/import_osm.ts` fetches libraries, cafes, coworking spaces and campus buildings around Boston from the [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) and saves them with `upsert_osm_places`. It replaced the Google Places edge function, since Google's terms don't allow keeping place details in our own database.
 
 ```bash
 npm run import:osm -- --dry-run --out=places.json    # fetch and summarize, save nothing
@@ -85,22 +84,9 @@ SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run import:osm
 
 OSM data is © OpenStreetMap contributors under the [ODbL](https://www.openstreetmap.org/copyright). The app must show that credit wherever it displays locations with an `osm_id`, and data derived from it has to stay available under the ODbL if it's used publicly.
 
-## Edge function: `places`
-
-- `functions/places/index.ts` is the entry point. It reads env vars and starts the server.
-- `functions/places/handler.ts` routes search, import and sync requests.
-- `functions/places/google.ts` is the Google API client and converts responses into our schema.
-
-The app calls it through `src/lib/places.ts`.
-
-It needs `GOOGLE_PLACES_API_KEY`:
-
-- **Hosted:** `npx supabase secrets set GOOGLE_PLACES_API_KEY=...`
-- **Local:** put it in `supabase/functions/.env` (see `functions/.env.example`), then run `npx supabase functions serve places`
-
 ## Tests
 
-Requires [Deno](https://deno.com) (`brew install deno`). No Docker, Supabase project or Google key needed.
+Requires [Deno](https://deno.com) (`brew install deno`). No Docker or Supabase project needed.
 
 ```bash
 npm run test:backend
@@ -108,9 +94,7 @@ npm run test:backend
 
 | File | What it covers |
 | --- | --- |
-| `tests/places/google_test.ts` | Converting Google responses (hours, address, place type, price), and the requests sent to Google |
-| `tests/places/handler_test.ts` | Each edge function route end to end, with Google and the database faked: input validation, error codes, and the caller's login being passed through |
-| `tests/database/schema_test.ts` | The real migrations running in an in-memory Postgres ([PGlite](https://pglite.dev)): constraints, cascade deletes, the ratings trigger, row level security for anon, student and admin, posts and the photo bucket, `upsert_google_place`, `upsert_osm_places`, and `nearby_locations` (radius, ordering, filters, cursor pagination, input validation) |
+| `tests/database/schema_test.ts` | The real migrations running in an in-memory Postgres ([PGlite](https://pglite.dev)): constraints, cascade deletes, the ratings trigger, row level security for anon, student and admin, posts and the photo bucket, `upsert_osm_places`, and `nearby_locations` (radius, ordering, filters, cursor pagination, input validation) |
 | `tests/osm/overpass_test.ts` | Converting OSM tags (location type, address, opening hours) and the Overpass queries, retries and campus matching, with the server faked |
 | `tests/lib/places_test.ts` | `getNearbyLocations` in `src/lib/places.ts`, with PostgREST faked by running `nearby_locations` in the in-memory database: paging with `nextCursor`, filters, and pageSize/cursor validation |
 
