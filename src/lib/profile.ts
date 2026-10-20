@@ -54,7 +54,7 @@ function validateName(name: string): string {
 
 /** Returns null when nobody is signed in. */
 export async function getMyProfile(): Promise<Profile | null> {
-  if (USE_MOCK_DATA) return { ...mockProfile }
+  if (USE_MOCK_DATA) return { ...mockDb.profile }
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -81,7 +81,7 @@ export async function updateDisplayName(name: string): Promise<string> {
   const trimmed = validateName(name)
 
   if (USE_MOCK_DATA) {
-    mockProfile = { ...mockProfile, displayName: trimmed }
+    mockDb.profile = { ...mockDb.profile, displayName: trimmed }
     return trimmed
   }
 
@@ -98,7 +98,7 @@ export async function updateDisplayName(name: string): Promise<string> {
 
 /** The user's own check-ins, newest first, with score and spot name. */
 export async function getMyCheckIns(userId: string): Promise<CheckIn[]> {
-  if (USE_MOCK_DATA) return [...mockCheckIns]
+  if (USE_MOCK_DATA) return [...mockDb.checkIns]
 
   // TODO(B-3/B-4): confirm column names once the posts table and the
   // posts_with_scores view exist, and build `details` from B-3's fields

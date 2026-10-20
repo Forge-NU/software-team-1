@@ -3,7 +3,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from '
 import { Feather } from '@expo/vector-icons'
 import { useProfile } from '../context/ProfileContext'
 import TopBar from '../components/TopBar'
-import { cardShadow, colors, fontFamily } from './theme'
+import { colors, layout, radius, spacing, typography } from '../theme'
 
 // Placeholder for F-7, built from the hi-fi Settings frame. The toggle and the
 // preferences summary aren't saved anywhere yet.
@@ -19,7 +19,7 @@ function Row({ title, subtitle, onPress }: { title: string; subtitle: string; on
         <Text style={styles.itemTitle}>{title}</Text>
         <Text style={styles.itemSub}>{subtitle}</Text>
       </View>
-      <Feather name="chevron-down" size={20} color={colors.brand} />
+      <Feather name="chevron-down" size={20} color={colors.primary} />
     </Pressable>
   )
 }
@@ -43,7 +43,7 @@ export default function SettingsScreen({ onBack, onOpenPreferences }: SettingsSc
             <Switch
               value={savedSpotAlerts}
               onValueChange={setSavedSpotAlerts}
-              trackColor={{ true: colors.primary, false: colors.border }}
+              trackColor={{ true: colors.primaryDark, false: colors.border }}
               ios_backgroundColor={colors.border}
               accessibilityLabel="Saved spot updates"
             />
@@ -78,35 +78,39 @@ export default function SettingsScreen({ onBack, onOpenPreferences }: SettingsSc
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
+  screen: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  content: { paddingHorizontal: 22, paddingBottom: 32 },
-  stack: { gap: 14 },
+  content: { paddingHorizontal: layout.screenPaddingHorizontal, paddingBottom: spacing.xl },
+  stack: { gap: spacing.sm },
   card: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 18,
-    ...cardShadow,
+    borderRadius: radius.xl,
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
-  section: { fontFamily, fontSize: 24, fontWeight: '600', color: colors.text, marginTop: 28, marginBottom: 14 },
+  section: { ...typography.title, color: colors.textPrimary, marginTop: spacing.xl, marginBottom: spacing.sm },
 
-  notifCard: { padding: 16 },
+  notifCard: { padding: spacing.md },
   toggleRow: { flexDirection: 'row', alignItems: 'center' },
-  toggleText: { flex: 1, paddingRight: 12 },
-  itemTitle: { fontFamily, fontSize: 18, fontWeight: '500', color: colors.text },
-  itemSub: { fontFamily, fontSize: 15, color: colors.muted, marginTop: 6, lineHeight: 20 },
+  toggleText: { flex: 1, paddingRight: spacing.sm },
+  itemTitle: { ...typography.heading, color: colors.textPrimary },
+  itemSub: { ...typography.bodySmall, color: colors.textSecondary, marginTop: spacing.xxs },
 
   statusCard: {
-    backgroundColor: colors.innerCard,
+    backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 16,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginTop: spacing.md,
   },
-  statusTitle: { fontFamily, fontSize: 14, fontWeight: '600', color: colors.text },
-  statusBody: { fontFamily, fontSize: 14, color: colors.slate, marginTop: 8, lineHeight: 20 },
+  statusTitle: { ...typography.label, color: colors.textPrimary },
+  statusBody: { ...typography.bodySmall, color: colors.textSecondary, marginTop: spacing.xxs },
 
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 18 },
+  row: { flexDirection: 'row', alignItems: 'center', padding: spacing.md },
 })

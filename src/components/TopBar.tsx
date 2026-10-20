@@ -1,7 +1,7 @@
 import React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
-import { colors, fontFamily } from '../screens/theme'
+import { colors, layout, spacing, typography } from '../theme'
 
 interface TopBarProps {
   title: string
@@ -16,7 +16,7 @@ export default function TopBar({ title, size = 'regular', onBack }: TopBarProps)
       <View style={styles.side}>
         {onBack ? (
           <Pressable onPress={onBack} hitSlop={12} accessibilityRole="button" accessibilityLabel="Back">
-            <Feather name="chevron-left" size={26} color={colors.text} />
+            <Feather name="chevron-left" size={26} color={colors.textPrimary} />
           </Pressable>
         ) : (
           <Text style={styles.wordmark}>Spotted</Text>
@@ -32,14 +32,14 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    height: layout.headerHeight,
+    paddingHorizontal: layout.screenPaddingHorizontal,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderColor: colors.border,
   },
   side: { width: 90 },
-  wordmark: { fontFamily, fontSize: 18, fontWeight: '500', color: colors.brand },
-  title: { fontFamily, flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '500', color: colors.text },
-  titleLarge: { fontSize: 26, fontWeight: '700' },
+  wordmark: { ...typography.heading, color: colors.primary },
+  title: { ...typography.heading, flex: 1, textAlign: 'center', color: colors.textPrimary },
+  titleLarge: { ...typography.display },
 })

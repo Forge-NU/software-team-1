@@ -13,7 +13,7 @@ import { Feather } from '@expo/vector-icons'
 import { CheckIn, getMyCheckIns, MAX_NAME_LENGTH, signOut } from '../lib/profile'
 import { useProfile } from '../context/ProfileContext'
 import TopBar from '../components/TopBar'
-import { cardShadow, colors, fontFamily } from './theme'
+import { colors, layout, radius, spacing, typography } from '../theme'
 
 /**
  * Navigation is passed in as callbacks so this screen works with whatever
@@ -117,7 +117,7 @@ export default function ProfileScreen({
   if (profileLoading || !profile) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={colors.primaryDark} />
       </View>
     )
   }
@@ -143,7 +143,7 @@ export default function ProfileScreen({
     <View>
       <View style={styles.identity}>
         <View style={styles.avatar}>
-          <Feather name="user" size={28} color={colors.slate} />
+          <Feather name="user" size={28} color={colors.textSecondary} />
         </View>
 
         {editing ? (
@@ -180,7 +180,7 @@ export default function ProfileScreen({
                 accessibilityRole="button"
                 accessibilityLabel="Edit name"
               >
-                <Feather name="edit-2" size={16} color={colors.muted} />
+                <Feather name="edit-2" size={16} color={colors.textSecondary} />
               </Pressable>
             </View>
             {profile.school && <Text style={styles.school}>{profile.school}</Text>}
@@ -201,7 +201,7 @@ export default function ProfileScreen({
   )
 
   const empty = loading ? (
-    <ActivityIndicator style={styles.spinner} color={colors.primary} />
+    <ActivityIndicator style={styles.spinner} color={colors.primaryDark} />
   ) : loadError ? null : (
     <View style={[styles.card, styles.empty]}>
       <Text style={styles.emptyTitle}>No updates yet</Text>
@@ -218,14 +218,14 @@ export default function ProfileScreen({
     <View style={styles.footer}>
       <Pressable style={[styles.card, styles.rowCard]} onPress={onOpenPreferences}>
         <Text style={styles.rowText}>Study preferences</Text>
-        <Feather name="chevron-down" size={20} color={colors.slate} />
+        <Feather name="chevron-down" size={20} color={colors.textSecondary} />
       </Pressable>
       <Pressable style={[styles.card, styles.rowCard]} onPress={onOpenSettings}>
         <Text style={styles.rowText}>Settings</Text>
-        <Feather name="chevron-down" size={20} color={colors.slate} />
+        <Feather name="chevron-down" size={20} color={colors.textSecondary} />
       </Pressable>
       <Pressable style={[styles.card, styles.rowCard]} onPress={confirmSignOut}>
-        <Text style={[styles.rowText, { color: colors.danger }]}>Sign out</Text>
+        <Text style={[styles.rowText, styles.dangerText]}>Sign out</Text>
       </Pressable>
     </View>
   )
@@ -263,76 +263,90 @@ export default function ProfileScreen({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
+  screen: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  content: { paddingHorizontal: 22, paddingTop: 22, paddingBottom: 40 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
-  spinner: { marginTop: 24 },
-  separator: { height: 14 },
+  content: {
+    paddingHorizontal: layout.screenPaddingHorizontal,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xl * 2,
+  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
+  spinner: { marginTop: spacing.xl },
+  separator: { height: spacing.sm },
 
   card: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 14,
-    ...cardShadow,
+    borderRadius: radius.lg,
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
 
-  identity: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   avatar: {
     width: 64,
     height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.avatarBg,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryLight,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  name: { fontFamily, flexShrink: 1, fontSize: 22, fontWeight: '500', color: colors.text },
-  school: { fontFamily, fontSize: 15, color: colors.slate, marginTop: 6 },
-  email: { fontFamily, fontSize: 14, color: colors.slate, marginTop: 14, marginBottom: 16 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  name: { ...typography.header, flexShrink: 1, color: colors.textPrimary },
+  school: { ...typography.bodySmall, color: colors.textSecondary, marginTop: spacing.xxs },
+  email: { ...typography.bodySmall, color: colors.textSecondary, marginTop: spacing.sm, marginBottom: spacing.md },
   nameInput: {
-    fontFamily,
-    backgroundColor: colors.card,
+    ...typography.body,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 18,
-    color: colors.text,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    color: colors.textPrimary,
   },
-  editActions: { flexDirection: 'row', gap: 20, marginTop: 8 },
-  link: { fontFamily, color: colors.primary, fontSize: 14, fontWeight: '600' },
-  linkMuted: { fontFamily, color: colors.muted, fontSize: 14 },
-  errorText: { fontFamily, color: colors.danger, fontSize: 13, marginTop: 6 },
+  editActions: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.xs },
+  link: { ...typography.label, color: colors.primaryDark },
+  linkMuted: { ...typography.bodySmall, color: colors.textSecondary },
+  errorText: { ...typography.caption, color: colors.danger, marginTop: spacing.xxs },
+  dangerText: { color: colors.danger },
 
-  statsCard: { paddingHorizontal: 16, paddingVertical: 16, marginBottom: 24 },
-  statsTitle: { fontFamily, fontSize: 17, fontWeight: '500', color: colors.text },
-  statsBody: { fontFamily, fontSize: 14, color: colors.slate, marginTop: 10 },
+  statsCard: { padding: spacing.md, marginBottom: spacing.xl },
+  statsTitle: { ...typography.heading, color: colors.textPrimary },
+  statsBody: { ...typography.bodySmall, color: colors.textSecondary, marginTop: spacing.xs },
 
-  sectionTitle: { fontFamily, fontSize: 17, fontWeight: '500', color: colors.text, marginBottom: 14 },
+  sectionTitle: { ...typography.heading, color: colors.textPrimary, marginBottom: spacing.sm },
 
-  updateCard: { paddingHorizontal: 16, paddingVertical: 16 },
-  updateSpot: { fontFamily, fontSize: 16, fontWeight: '500', color: colors.text },
-  updateWhen: { fontFamily, fontSize: 14, fontWeight: '600', color: colors.text, marginTop: 10 },
-  updateDetails: { fontFamily, fontSize: 13, color: colors.slate, marginTop: 10 },
+  updateCard: { padding: spacing.md },
+  updateSpot: { ...typography.bodyStrong, color: colors.textPrimary },
+  updateWhen: { ...typography.label, color: colors.textPrimary, marginTop: spacing.xs },
+  updateDetails: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs },
 
-  empty: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 16 },
-  emptyTitle: { fontFamily, fontSize: 16, fontWeight: '600', color: colors.text },
-  emptyBody: { fontFamily, fontSize: 14, color: colors.slate, textAlign: 'center', marginTop: 6, lineHeight: 20 },
-  button: { marginTop: 16, backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
-  buttonText: { fontFamily, color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  empty: { alignItems: 'center', paddingVertical: spacing.xl, paddingHorizontal: spacing.md },
+  emptyTitle: { ...typography.bodyStrong, color: colors.textPrimary },
+  emptyBody: { ...typography.bodySmall, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xxs },
+  button: {
+    marginTop: spacing.md,
+    backgroundColor: colors.primaryDark,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+  },
+  buttonText: { ...typography.button, color: colors.surface },
 
-  footer: { marginTop: 36, gap: 14 },
+  footer: { marginTop: spacing.xl + spacing.sm, gap: spacing.sm },
   rowCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 18,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
-  rowText: { fontFamily, fontSize: 16, fontWeight: '500', color: colors.slate },
+  rowText: { ...typography.bodyStrong, color: colors.textSecondary },
 })

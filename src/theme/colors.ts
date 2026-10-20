@@ -7,6 +7,7 @@ const palette = {
     blue700: '#176FD3',
     gray500: '#6B7280',
     gray900: '#111827',
+    red600: '#DC2626',
     white: '#FFFFFF',
     black: '#000000',
 } as const;
@@ -21,5 +22,6 @@ export const colors = {
     textPrimary: palette.gray900,
     textSecondary: palette.gray500,
     textOnPrimaryLight: palette.blue700,
+    danger: palette.red600,
     shadow: palette.black,
 } as const;
