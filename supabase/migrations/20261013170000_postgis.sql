@@ -1,10 +1,7 @@
 -- Adds the PostGIS extension to enable spatial data types and functions in the database
 CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA extensions;
 
--- Geography column for location table, used for spatial queries and mapping.
--- It is the source of truth for distances. Being generated from the NOT NULL latitude and longitude
--- columns, it is filled in for existing rows when added and always matches them, so the
--- "<latitude>,<longitude>,<location_id>" cursor used by nearby_locations always has a value.
+-- Geography column for location table, used for spatial queries and mapping, generated from the NOT NULL latitude and longitude columns
 ALTER TABLE public.location
     ADD COLUMN IF NOT EXISTS geo_location extensions.geography(Point, 4326)
         GENERATED ALWAYS AS (
