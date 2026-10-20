@@ -87,6 +87,21 @@ Deno.test('getNearbyLocations', async (t) => {
       assertEquals(page.nextCursor, `42.339,${HERE.lon},${b}`)
     }))
 
+  await t.step('the cursor keeps full coordinate precision, so paging past a tie is exact', () =>
+    withDb(async (db) => {
+      using _ = stubRpc(db)
+      // Coordinates whose distances differ only in the last bits.
+      for (const [name, lat] of [['A', 42.33912345678901], ['B', 42.33912345678901], ['C', 42.339123456789014]] as const) {
+        await insert(db, name, lat, { longitude: -71.08765432109877 })
+      }
+      const first = await getNearbyLocations(HERE.lat, HERE.lon, 500, {}, undefined, 1)
+      assertEquals(first.nextCursor?.startsWith('42.33912345678901,-71.08765432109877,'), true)
+      const second = await getNearbyLocations(HERE.lat, HERE.lon, 500, {}, first.nextCursor!, 1)
+      const third = await getNearbyLocations(HERE.lat, HERE.lon, 500, {}, second.nextCursor!, 1)
+      assertEquals([first, second, third].map((p) => p.locations[0].name), ['A', 'B', 'C'])
+      assertEquals(third.hasMore, false)
+    }))
+
   await t.step('returns an empty page when nothing is nearby', () =>
     withDb(async (db) => {
       using _ = stubRpc(db)

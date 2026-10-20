@@ -951,6 +951,17 @@ Deno.test('nearby_locations', async (t) => {
       assertEquals(await point(select), { lat: 40, lon: -70 })
     }))
 
+  await t.step('every location has coordinates and a geo_location', () =>
+    withDb(async (db) => {
+      await assertPgError(insert(db, 'No latitude', null as unknown as number), NOT_NULL)
+      await assertPgError(insert(db, 'No longitude', 42.3, { longitude: null }), NOT_NULL)
+      const [{ notnull }] = await db.query<{ notnull: boolean }>(
+        `select attnotnull as notnull from pg_attribute
+         where attrelid = 'public.location'::regclass and attname = 'geo_location'`,
+      )
+      assertEquals(notnull, true)
+    }))
+
   await t.step('returns locations within the radius, nearest first', () =>
     withDb(async (db) => {
       await insert(db, 'Far', 42.348) // ~1.1 km
