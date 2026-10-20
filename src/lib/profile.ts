@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { mockDb } from './mocks/profileMocks'
 
 // Flip to false once B-2 (users/auth) and B-3 (posts) are merged.
 export const USE_MOCK_DATA = true
@@ -39,51 +40,6 @@ function schoolFromEmail(email: string | null | undefined): string | null {
   const domain = email?.split('@')[1]?.toLowerCase()
   return domain ? SCHOOLS_BY_DOMAIN[domain] ?? null : null
 }
-
-// ---------- Mock data (used while USE_MOCK_DATA is true) ----------
-
-let mockProfile: Profile = {
-  userId: 'mock-user',
-  displayName: 'Angel El Moucary',
-  email: 'moucary.angel@northeastern.edu',
-  school: 'Northeastern University',
-  memberSince: '2026-10-01T12:00:00',
-  savedCount: 1,
-}
-
-function yesterdayAt(h: number, m: number) {
-  const d = new Date()
-  d.setDate(d.getDate() - 1)
-  d.setHours(h, m, 0, 0)
-  return d.toISOString()
-}
-
-const mockCheckIns: CheckIn[] = [
-  {
-    postId: 'p1',
-    locationId: 1,
-    locationName: 'Curry Study Room 201',
-    createdAt: yesterdayAt(11, 56),
-    score: 4,
-    details: ['Nearly empty', 'Quiet', 'Outlets', '1 photo'],
-  },
-  {
-    postId: 'p2',
-    locationId: 2,
-    locationName: 'Snell 3rd floor',
-    createdAt: new Date(2026, 9, 2, 14, 10).toISOString(),
-    score: 2,
-    details: ['Some seats', 'Quiet', 'Outlets'],
-  },
-  {
-    postId: 'p3',
-    locationId: 3,
-    locationName: 'Law Library',
-    createdAt: new Date(2026, 9, 1, 16, 25).toISOString(),
-    score: 0,
-    details: ['Busy', 'Moderate', 'Outlets'],
-  },
-]
 
 // ---------- API ----------
 
