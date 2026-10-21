@@ -7,7 +7,7 @@ export const USE_MOCK_DATA = true
 // TODO(B-2): confirm the users table's id + name columns with whoever owns B-2.
 const USERS_TABLE = 'users'
 const USER_ID_COL = 'user_id'
-const NAME_COL = 'display_name'
+const NAME_COL = 'name'
 
 export const MAX_NAME_LENGTH = 40
 
