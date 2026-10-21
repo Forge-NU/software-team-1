@@ -77,6 +77,14 @@ Use the helpers in `src/lib/places.ts` from the app: `searchPlaces`, `importPlac
 /.github    - issue templates, PR template
 ```
 
+## Frontend conventions
+
+- **Routes** live in `src/app` (Expo Router). `(auth)` = welcome / sign up / sign in, `(tabs)` = the tab bar, `spot/[id]` = spot detail. Signed-out users can only reach `(auth)`.
+- **Styling:** use NativeWind classes from `src/theme/tokens.js` — e.g. `bg-primary`, `bg-surface-canvas`, `text-ink-muted`, `text-title`, `px-gutter`, `rounded-card`. Every `<Text>` needs a font class: `font-sans`, `font-sans-medium` or `font-sans-semibold`. Don't hardcode hex values; if you need a new color, add it to `tokens.js` (and `tokens.d.ts`).
+- **Shared UI:** `Button`, `TextField`, `FormTextField`, `Screen` from `@/components/ui`.
+- **Auth:** `useAuth()` from `@/providers/auth-context` gives `isSignedIn`, `email`, `signIn`, `signUp`, `signOut`. Set `EXPO_PUBLIC_FAKE_AUTH=true` in `.env` to click through without Supabase.
+- **Mock data:** import from `@/mocks` (`mockLocations`, `mockPosts`, `getMockLocation`, `getMockPostsForLocation`). Add to the arrays freely.
+
 ## Design Docs
 Link to Figma / design review slides / architecture doc here.
 
