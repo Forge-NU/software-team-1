@@ -173,16 +173,19 @@ Deno.test('location', async (t) => {
         `insert into public.review (seating_id, overall_rating) values ($1, 5) returning review_id`,
         [seatingId],
       )
-      await db.as(STUDENT).query(`insert into public.photo (seating_id, image_url) values ($1, 'https://x/p.jpg')`, [
-        seatingId,
+      await db.query(`insert into storage.objects (bucket_id, name) values ('post-photos', $1)`, [
+        `${STUDENT}/cascade.jpg`,
       ])
-      await db.as(STUDENT).query(`insert into public.check_in (seating_id, crowd_level_id) values ($1, 3)`, [seatingId])
+      await db.as(STUDENT).query(
+        `select public.create_post($1, $2, 3::smallint, null::smallint, null::real, null::text, $3)`,
+        [locationId, seatingId, [`${STUDENT}/cascade.jpg`]],
+      )
       await db.as(OTHER_STUDENT).query(`insert into public.flag (review_id, reason) values ($1, 'spam')`, [review_id])
 
       await db.query(`delete from public.location where location_id = $1`, [locationId])
 
       for (const table of [
-        'address', 'day_hours', 'area', 'seating_area', 'overall_ratings', 'review', 'photo', 'check_in', 'flag',
+        'address', 'day_hours', 'area', 'seating_area', 'overall_ratings', 'review', 'post', 'post_photo', 'flag',
       ]) {
         assertEquals(await db.query(`select * from public.${table}`), [], `${table} not emptied`)
       }
@@ -306,36 +309,338 @@ Deno.test('reviews and overall_ratings', async (t) => {
     }))
 })
 
-Deno.test('check_in', () =>
-  withDb(async (db) => {
-    const { seatingId } = await seed(db)
-    const checkIn = (crowd: number | null, noise: number | null, wifi: number | null) =>
-      db.as(STUDENT).query(
-        `insert into public.check_in (seating_id, crowd_level_id, noise_level_id, wifi_mbps) values ($1, $2, $3, $4)`,
-        [seatingId, crowd, noise, wifi],
-      )
-    await assertPgError(checkIn(null, 2, 50), NOT_NULL)
-    await assertPgError(checkIn(9, 2, 50), FOREIGN_KEY)
-    await assertPgError(checkIn(3, 9, 50), FOREIGN_KEY)
-    await assertPgError(checkIn(3, 2, -1), CHECK)
-    await checkIn(3, null, null)
-    await checkIn(3, 2, 85.5)
+Deno.test('post', async (t) => {
+  const photoPath = (userId: string, file = 'photo.jpg') => `${userId}/${file}`
 
-    const rows = await db.query<{ user_id: string }>('select user_id from public.check_in')
-    assertEquals(rows.every((r) => r.user_id === STUDENT), true, 'user_id should default to the caller')
-  }))
+  const putPhoto = (db: Parameters<Parameters<typeof withDb>[0]>[0], path: string) =>
+    db.query(`insert into storage.objects (bucket_id, name) values ('post-photos', $1)`, [path])
+
+  const createPost = (
+    db: Parameters<Parameters<typeof withDb>[0]>[0],
+    actor: string | null,
+    locationId: number,
+    paths: string[],
+    fields: {
+      seatingId?: number | null
+      crowd?: number | null
+      noise?: number | null
+      wifi?: number | null
+      caption?: string | null
+    } = {},
+  ) =>
+    db.as(actor).query<{ post_id: number }>(
+      `select public.create_post($1, $2, $3, $4, $5, $6, $7) as post_id`,
+      [
+        locationId,
+        fields.seatingId === undefined ? null : fields.seatingId,
+        fields.crowd === undefined ? 3 : fields.crowd,
+        fields.noise === undefined ? null : fields.noise,
+        fields.wifi === undefined ? null : fields.wifi,
+        fields.caption === undefined ? null : fields.caption,
+        paths,
+      ],
+    )
+
+  const postCount = (db: Parameters<Parameters<typeof withDb>[0]>[0]) =>
+    db.query<{ n: number }>('select count(*)::int as n from public.post')
+
+  await t.step('needs a known crowd level, and noise and wifi are optional', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      const path = photoPath(STUDENT)
+      await putPhoto(db, path)
+      const post = (crowd: number | null, noise: number | null, wifi: number | null) =>
+        createPost(db, STUDENT, locationId, [path], { crowd, noise, wifi })
+      await assertPgError(post(null, 2, 50), NOT_NULL)
+      await assertPgError(post(9, 2, 50), FOREIGN_KEY)
+      await assertPgError(post(3, 9, 50), FOREIGN_KEY)
+      await assertPgError(post(3, 2, -1), CHECK)
+      assertEquals(await postCount(db), [{ n: 0 }])
+      await post(3, null, null)
+    }))
+
+  await t.step('rejects a caption longer than 500 characters', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      const path = photoPath(STUDENT)
+      await putPhoto(db, path)
+      await assertPgError(createPost(db, STUDENT, locationId, [path], { caption: 'x'.repeat(501) }), CHECK)
+      await createPost(db, STUDENT, locationId, [path], { caption: 'x'.repeat(500) })
+    }))
+
+  await t.step('cannot be created without a photo, a missing upload, or another user\'s folder', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      await assertPgError(createPost(db, STUDENT, locationId, []), CHECK)
+      await assertPgError(createPost(db, STUDENT, locationId, [photoPath(STUDENT, 'missing.jpg')]), FOREIGN_KEY)
+      await putPhoto(db, photoPath(OTHER_STUDENT))
+      await assertPgError(createPost(db, STUDENT, locationId, [photoPath(OTHER_STUDENT)]), INSUFFICIENT_PRIVILEGE)
+      assertEquals(await postCount(db), [{ n: 0 }])
+    }))
+
+  await t.step('a direct insert without a photo fails when the constraint is checked', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      await db.query(`insert into public.post (user_id, location_id, crowd_level_id) values ($1, $2, 1)`, [
+        STUDENT,
+        locationId,
+      ])
+      await assertPgError(db.query('set constraints post_requires_photo immediate'), CHECK)
+    }))
+
+  await t.step('saves the post and its photos for the caller', () =>
+    withDb(async (db) => {
+      const { locationId, seatingId } = await seed(db)
+      const paths = [photoPath(STUDENT, 'one.jpg'), photoPath(STUDENT, 'two.jpg')]
+      await putPhoto(db, paths[0])
+      await putPhoto(db, paths[1])
+      const [{ post_id }] = await createPost(db, STUDENT, locationId, paths, {
+        seatingId,
+        noise: 2,
+        wifi: 85.5,
+        caption: 'Window seat',
+      })
+
+      assertEquals(
+        await db.query(
+          `select user_id, location_id, seating_id, crowd_level_id, noise_level_id, wifi_mbps, caption
+           from public.post where post_id = $1`,
+          [post_id],
+        ),
+        [{
+          user_id: STUDENT,
+          location_id: locationId,
+          seating_id: seatingId,
+          crowd_level_id: 3,
+          noise_level_id: 2,
+          wifi_mbps: 85.5,
+          caption: 'Window seat',
+        }],
+      )
+      assertEquals(
+        await db.query(`select storage_path from public.post_photo where post_id = $1 order by storage_path`, [post_id]),
+        [{ storage_path: paths[0] }, { storage_path: paths[1] }],
+      )
+      assertEquals(
+        await db.query(
+          `select u.name as author_name from public.post p
+           join public.users u on u.user_id = p.user_id where p.post_id = $1`,
+          [post_id],
+        ),
+        [{ author_name: 'Sam Student' }],
+      )
+    }))
+
+  await t.step('a seat from another location is rejected and leaves no post', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      const [{ location_id: otherLocation }] = await db.query<{ location_id: number }>(
+        `insert into public.location (name, latitude, longitude, location_type)
+         values ('Other', 42, -71, 'cafe') returning location_id`,
+      )
+      const [{ seating_id: otherSeat }] = await db.query<{ seating_id: number }>(
+        `insert into public.seating_area (location_id, name, seat_type, capacity_id, outlet_level_id)
+         values ($1, 'Other desks', 'desk', 1, 0) returning seating_id`,
+        [otherLocation],
+      )
+      const path = photoPath(STUDENT)
+      await putPhoto(db, path)
+      await assertPgError(createPost(db, STUDENT, locationId, [path], { seatingId: otherSeat }), FOREIGN_KEY)
+      assertEquals(await postCount(db), [{ n: 0 }])
+    }))
+
+  await t.step('newest post for a location comes first', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      const olderPath = photoPath(STUDENT, 'older.jpg')
+      const newerPath = photoPath(OTHER_STUDENT, 'newer.jpg')
+      await putPhoto(db, olderPath)
+      await putPhoto(db, newerPath)
+      const [{ post_id: older }] = await createPost(db, STUDENT, locationId, [olderPath])
+      const [{ post_id: newer }] = await createPost(db, OTHER_STUDENT, locationId, [newerPath])
+      await db.query(`update public.post set created_at = now() - interval '1 hour' where post_id = $1`, [older])
+
+      assertEquals(
+        await db.query<{ post_id: number }>(
+          `select post_id from public.post where location_id = $1 order by created_at desc`,
+          [locationId],
+        ),
+        [{ post_id: newer }, { post_id: older }],
+      )
+    }))
+
+  await t.step('signed-in users can read, and only the owner or an admin can delete', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      const path = photoPath(STUDENT)
+      await putPhoto(db, path)
+
+      await assertPgError(db.as(null).query('select * from public.post'), INSUFFICIENT_PRIVILEGE)
+      await assertPgError(db.as(null).query('select * from public.post_photo'), INSUFFICIENT_PRIVILEGE)
+      await assertPgError(createPost(db, null, locationId, [path]), INSUFFICIENT_PRIVILEGE)
+      await assertPgError(
+        db.as(STUDENT).query(`insert into public.post (location_id, crowd_level_id) values ($1, 1)`, [locationId]),
+        INSUFFICIENT_PRIVILEGE,
+      )
+
+      const [{ post_id }] = await createPost(db, STUDENT, locationId, [path])
+      assertEquals((await db.as(OTHER_STUDENT).query('select * from public.post')).length, 1)
+      assertEquals((await db.as(OTHER_STUDENT).query('select * from public.post_photo')).length, 1)
+      assertEquals(await db.as(OTHER_STUDENT).query(`delete from public.post returning post_id`), [])
+      await assertPgError(
+        db.as(STUDENT).query(`update public.post set caption = 'nope' where post_id = $1`, [post_id]),
+        INSUFFICIENT_PRIVILEGE,
+      )
+
+      assertEquals(await db.as(STUDENT).query(`delete from public.post where post_id = $1 returning post_id`, [post_id]), [
+        { post_id },
+      ])
+      assertEquals(await db.query('select * from public.post_photo'), [])
+
+      await putPhoto(db, photoPath(STUDENT, 'again.jpg'))
+      await createPost(db, STUDENT, locationId, [photoPath(STUDENT, 'again.jpg')])
+      assertEquals((await db.as(ADMIN).query(`delete from public.post returning post_id`)).length, 1)
+    }))
+
+  await t.step('signed-in users can upload post photos only into their own folder', () =>
+    withDb(async (db) => {
+      await seed(db)
+      const insert = (actor: string | null, path: string) =>
+        db.as(actor).query(`insert into storage.objects (bucket_id, name) values ('post-photos', $1)`, [path])
+
+      await assertPgError(insert(null, photoPath(STUDENT, 'anon.jpg')), INSUFFICIENT_PRIVILEGE)
+      await assertPgError(insert(STUDENT, photoPath(OTHER_STUDENT, 'stolen.jpg')), INSUFFICIENT_PRIVILEGE)
+      await insert(STUDENT, photoPath(STUDENT, 'mine.jpg'))
+
+      assertEquals(await db.as(null).query(`select name from storage.objects`), [])
+      assertEquals(await db.as(OTHER_STUDENT).query<{ name: string }>(`select name from storage.objects`), [
+        { name: photoPath(STUDENT, 'mine.jpg') },
+      ])
+      assertEquals(
+        await db.as(OTHER_STUDENT).query(`delete from storage.objects returning name`),
+        [],
+      )
+      assertEquals(await db.as(STUDENT).query(`delete from storage.objects returning name`), [
+        { name: photoPath(STUDENT, 'mine.jpg') },
+      ])
+    }))
+
+  await t.step('deleting the location or the author removes the post', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      const [{ location_id: otherLocation }] = await db.query<{ location_id: number }>(
+        `insert into public.location (name, latitude, longitude, location_type)
+         values ('Other', 42, -71, 'cafe') returning location_id`,
+      )
+      await putPhoto(db, photoPath(STUDENT, 'here.jpg'))
+      await putPhoto(db, photoPath(OTHER_STUDENT, 'there.jpg'))
+      await createPost(db, STUDENT, locationId, [photoPath(STUDENT, 'here.jpg')])
+      await createPost(db, OTHER_STUDENT, otherLocation, [photoPath(OTHER_STUDENT, 'there.jpg')])
+
+      await db.query(`delete from public.location where location_id = $1`, [locationId])
+      assertEquals(await db.query<{ user_id: string }>('select user_id from public.post'), [{ user_id: OTHER_STUDENT }])
+
+      await db.query(`delete from auth.users where id = $1`, [OTHER_STUDENT])
+      assertEquals(await db.query('select * from public.post'), [])
+      assertEquals(await db.query('select * from public.post_photo'), [])
+    }))
+})
+
+Deno.test('review_photo', async (t) => {
+  const photoPath = (userId: string, file = 'review.jpg') => `${userId}/${file}`
+
+  const putReviewPhoto = (db: Parameters<Parameters<typeof withDb>[0]>[0], path: string) =>
+    db.query(`insert into storage.objects (bucket_id, name) values ('review-photos', $1)`, [path])
+
+  const attach = (
+    db: Parameters<Parameters<typeof withDb>[0]>[0],
+    actor: string | null,
+    reviewId: number,
+    paths: string[],
+  ) =>
+    db.as(actor).query(`select public.attach_review_photos($1, $2)`, [reviewId, paths])
+
+  await t.step('reviews can exist with no photos', () =>
+    withDb(async (db) => {
+      const { seatingId } = await seed(db)
+      await db.as(STUDENT).query(`insert into public.review (seating_id, overall_rating) values ($1, 4)`, [seatingId])
+      assertEquals(await db.query('select * from public.review_photo'), [])
+    }))
+
+  await t.step('attach is optional and links uploaded files to the author review', () =>
+    withDb(async (db) => {
+      const { seatingId } = await seed(db)
+      const path = photoPath(STUDENT)
+      await putReviewPhoto(db, path)
+      const [{ review_id }] = await db.as(STUDENT).query<{ review_id: number }>(
+        `insert into public.review (seating_id, overall_rating) values ($1, 5) returning review_id`,
+        [seatingId],
+      )
+      await attach(db, STUDENT, review_id, [path])
+      assertEquals(
+        await db.query(`select storage_path from public.review_photo where review_id = $1`, [review_id]),
+        [{ storage_path: path }],
+      )
+    }))
+
+  await t.step('empty paths are a no-op', () =>
+    withDb(async (db) => {
+      const { seatingId } = await seed(db)
+      const [{ review_id }] = await db.as(STUDENT).query<{ review_id: number }>(
+        `insert into public.review (seating_id, overall_rating) values ($1, 3) returning review_id`,
+        [seatingId],
+      )
+      await attach(db, STUDENT, review_id, [])
+      assertEquals(await db.query('select * from public.review_photo'), [])
+    }))
+
+  await t.step('cannot attach to someone else review or from another user folder', () =>
+    withDb(async (db) => {
+      const { seatingId } = await seed(db)
+      const [{ review_id }] = await db.as(STUDENT).query<{ review_id: number }>(
+        `insert into public.review (seating_id, overall_rating) values ($1, 3) returning review_id`,
+        [seatingId],
+      )
+      await putReviewPhoto(db, photoPath(OTHER_STUDENT))
+      await assertPgError(attach(db, OTHER_STUDENT, review_id, [photoPath(OTHER_STUDENT)]), INSUFFICIENT_PRIVILEGE)
+      await putReviewPhoto(db, photoPath(STUDENT))
+      await assertPgError(attach(db, STUDENT, review_id, [photoPath(OTHER_STUDENT)]), INSUFFICIENT_PRIVILEGE)
+      assertEquals(await db.query('select * from public.review_photo'), [])
+    }))
+
+  await t.step('deleting a review removes its photos', () =>
+    withDb(async (db) => {
+      const { seatingId } = await seed(db)
+      const path = photoPath(STUDENT)
+      await putReviewPhoto(db, path)
+      const [{ review_id }] = await db.as(STUDENT).query<{ review_id: number }>(
+        `insert into public.review (seating_id, overall_rating) values ($1, 2) returning review_id`,
+        [seatingId],
+      )
+      await attach(db, STUDENT, review_id, [path])
+      await db.as(STUDENT).query(`delete from public.review where review_id = $1`, [review_id])
+      assertEquals(await db.query('select * from public.review_photo'), [])
+    }))
+})
 
 Deno.test('flag', async (t) => {
   await t.step('must target something, and at most one of review or photo', () =>
     withDb(async (db) => {
-      const { seatingId } = await seed(db)
+      const { seatingId, locationId } = await seed(db)
       const [{ review_id }] = await db.as(OTHER_STUDENT).query<{ review_id: number }>(
         `insert into public.review (seating_id, overall_rating) values ($1, 1) returning review_id`,
         [seatingId],
       )
-      const [{ photo_id }] = await db.as(OTHER_STUDENT).query<{ photo_id: number }>(
-        `insert into public.photo (seating_id, image_url) values ($1, 'https://x/p.jpg') returning photo_id`,
-        [seatingId],
+      await db.query(`insert into storage.objects (bucket_id, name) values ('post-photos', $1)`, [
+        `${OTHER_STUDENT}/flag.jpg`,
+      ])
+      const [{ post_id }] = await db.as(OTHER_STUDENT).query<{ post_id: number }>(
+        `select public.create_post($1, null::bigint, 3::smallint, null::smallint, null::real, null::text, $2) as post_id`,
+        [locationId, [`${OTHER_STUDENT}/flag.jpg`]],
+      )
+      const [{ photo_id }] = await db.query<{ photo_id: number }>(
+        `select photo_id from public.post_photo where post_id = $1`,
+        [post_id],
       )
       const flag = (review: number | null, photo: number | null, user: string | null) =>
         db.as(STUDENT).query(
@@ -444,7 +749,7 @@ Deno.test('row level security', async (t) => {
       await db.as(ADMIN).query(`insert into public.campus values ('Fake U')`)
     }))
 
-  await t.step('users manage only their own reviews, photos and check-ins', () =>
+  await t.step('users manage only their own reviews', () =>
     withDb(async (db) => {
       const { seatingId } = await seed(db)
       await assertPgError(
@@ -460,27 +765,25 @@ Deno.test('row level security', async (t) => {
       )
 
       await db.as(OTHER_STUDENT).query(`insert into public.review (seating_id, overall_rating) values ($1, 2)`, [seatingId])
-      await db.as(OTHER_STUDENT).query(`insert into public.photo (seating_id, image_url) values ($1, 'https://x')`, [
-        seatingId,
-      ])
-      await db.as(OTHER_STUDENT).query(`insert into public.check_in (seating_id, crowd_level_id) values ($1, 1)`, [
-        seatingId,
-      ])
 
       assertEquals((await db.as(null).query('select * from public.review')).length, 1)
-      for (const table of ['review', 'photo', 'check_in']) {
-        assertEquals(await db.as(STUDENT).query(`delete from public.${table} returning 1`), [], table)
-      }
+      assertEquals(await db.as(STUDENT).query(`delete from public.review returning 1`), [])
       assertEquals(await db.as(STUDENT).query(`update public.review set overall_rating = 5 returning 1`), [])
     }))
 
-  await t.step('admins can moderate reviews and photos', () =>
+  await t.step('admins can moderate reviews and posts', () =>
     withDb(async (db) => {
-      const { seatingId } = await seed(db)
+      const { seatingId, locationId } = await seed(db)
       await db.as(STUDENT).query(`insert into public.review (seating_id, overall_rating) values ($1, 2)`, [seatingId])
-      await db.as(STUDENT).query(`insert into public.photo (seating_id, image_url) values ($1, 'https://x')`, [seatingId])
+      await db.query(`insert into storage.objects (bucket_id, name) values ('post-photos', $1)`, [
+        `${STUDENT}/moderate.jpg`,
+      ])
+      await db.as(STUDENT).query(
+        `select public.create_post($1, null::bigint, 3::smallint, null::smallint, null::real, null::text, $2)`,
+        [locationId, [`${STUDENT}/moderate.jpg`]],
+      )
       assertEquals((await db.as(ADMIN).query(`delete from public.review returning 1`)).length, 1)
-      assertEquals((await db.as(ADMIN).query(`delete from public.photo returning 1`)).length, 1)
+      assertEquals((await db.as(ADMIN).query(`delete from public.post returning 1`)).length, 1)
     }))
 })
 
