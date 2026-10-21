@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { Location } from '../types/location'
 
 export interface PlaceSearchResult {
   googlePlaceId: string
@@ -19,33 +20,7 @@ export interface PlaceSearchParams {
   pageSize?: number
 }
 
-export interface Address {
-  street_one: string | null
-  street_two: string | null
-  city: string | null
-  region: string | null
-  postal_code: string | null
-  country_code: string | null
-}
-
-export interface DayHours {
-  day: string
-  open_time: string
-  close_time: string
-}
-
-export interface Location {
-  location_id: number
-  google_place_id: string | null
-  name: string
-  latitude: number
-  longitude: number
-  location_type: string
-  campus: string | null
-  price_range_id: number | null
-  address: Address | null
-  day_hours: DayHours[]
-}
+export type { Address, DayHours, Location } from '../types/location'
 
 export type LocationUpdate = Partial<
   Pick<Location, 'name' | 'latitude' | 'longitude' | 'location_type' | 'campus' | 'price_range_id'>

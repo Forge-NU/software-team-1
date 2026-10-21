@@ -99,9 +99,8 @@ Deno.test('rankSpots', async (t) => {
     assertEquals(names(rankSpots(rows, { ...HERE, sort: 'distance' })), ['Packed', 'Unknown', 'Calm'])
   })
 
-  await t.step('radius, type, price, group study, limit and latest photo', () => {
+  await t.step('type, price, group study, limit and latest photo', () => {
     const rows = [
-      spot('Far Cafe', { lat: 42.5, lng: -71.0 }),
       spot('Snell', {
         type: 'library',
         price: 0,

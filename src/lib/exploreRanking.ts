@@ -1,4 +1,6 @@
-// Pure filtering and ranking for Explore, kept free of imports so the backend tests can run it.
+// Pure filtering and ranking for Explore. Only type imports, so the backend tests can run it.
+
+import type { Address, Location } from '../types/location.ts'
 
 export const RECENT_MINUTES = 90
 
@@ -20,6 +22,11 @@ export interface RankOptions {
   now?: Date
 }
 
+type LocationFields = Pick<
+  Location,
+  'location_id' | 'name' | 'location_type' | 'campus' | 'price_range_id' | 'latitude' | 'longitude'
+>
+
 export interface PostRow {
   created_at: string
   crowd_level_id: number
@@ -29,15 +36,8 @@ export interface PostRow {
   post_photo: { storage_path: string; created_at: string }[]
 }
 
-export interface LocationRow {
-  location_id: number
-  name: string
-  location_type: string
-  campus: string | null
-  price_range_id: number | null
-  latitude: number
-  longitude: number
-  address: { street_one: string | null; city: string | null } | null
+export interface LocationRow extends LocationFields {
+  address: Pick<Address, 'street_one' | 'city'> | null
   area: { noise_policy: string | null }[]
   seating_area: {
     seat_type: string
@@ -47,16 +47,7 @@ export interface LocationRow {
   post: PostRow[]
 }
 
-export interface ExploreSpot {
-  location_id: number
-  name: string
-  location_type: string
-  campus: string | null
-  price_range_id: number | null
-  latitude: number
-  longitude: number
-  street_one: string | null
-  city: string | null
+export interface ExploreSpot extends LocationFields, Pick<Address, 'street_one' | 'city'> {
   distance_meters: number
   /** False means "no recent updates": crowd and noise are null. */
   is_current: boolean
@@ -105,8 +96,9 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
   const spots: ExploreSpot[] = []
 
   for (const row of rows) {
+    // The radius is applied server side by nearby_locations, which does not return the
+    // distance itself. This is only for display and the closeness score.
     const distance = distanceMeters(opts.latitude, opts.longitude, row.latitude, row.longitude)
-    if (distance > opts.radiusMeters) continue
     if (f.locationTypes?.length && !f.locationTypes.includes(row.location_type)) continue
     if (f.priceRangeIds?.length && (row.price_range_id == null || !f.priceRangeIds.includes(row.price_range_id))) continue
     if (f.groupStudy && !row.seating_area.some((s) => s.capacity_id >= 2 || s.seat_type === 'study_room')) continue
@@ -124,7 +116,7 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
 
     const photo = latest(row.post.flatMap((p) => p.post_photo), (p) => p.created_at)
     const score =
-      0.3 * (1 - distance / Math.max(opts.radiusMeters, 1)) +
+      0.3 * Math.max(0, 1 - distance / Math.max(opts.radiusMeters, 1)) +
       (current ? (0.5 * (5 - current.crowd_level_id)) / 4 + 0.2 * (1 - age / windowMs) : 0)
 
     spots.push({
