@@ -15,7 +15,7 @@ export type LocationPermission = 'precise' | 'approximate' | 'denied' | 'blocked
  * 
  * @param status The Expo Location permission response
  * 
- * @returns The corresponding LocationPermission type
+ * @returns The corresponding ``LocationPermission`` type
  */
 function toLocationPermission(status: ExpoLocation.LocationPermissionResponse): LocationPermission {
     if (status.granted) {
@@ -26,3 +26,29 @@ function toLocationPermission(status: ExpoLocation.LocationPermissionResponse): 
     return status.canAskAgain ? 'denied' : 'blocked'
 }
 
+/** 
+ * Checks the current status of location permissions
+ * 
+ * @returns The current ``LocationPermission``
+ */
+export async function getLocationPermission(): Promise<LocationPermission> {
+  return toLocationPermission(await ExpoLocation.getForegroundPermissionsAsync())
+}
+
+/**
+ * Prompts the user to grant location permission if the OS will allow it
+ * 
+ * @returns The current ``LocationPermission`` after the prompt
+ */
+export async function requestLocationPermission(): Promise<LocationPermission> {
+  const current = await ExpoLocation.getForegroundPermissionsAsync()
+  if (current.granted || !current.canAskAgain) return toLocationPermission(current)
+  return toLocationPermission(await ExpoLocation.requestForegroundPermissionsAsync())
+}
+
+/**
+ * Opens the settings app, allowing the user to manually change location permissions
+ */
+export function openAppSettings(): Promise<void> {
+  return Linking.openSettings()
+}
