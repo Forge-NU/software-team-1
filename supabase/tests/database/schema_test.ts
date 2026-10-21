@@ -1104,4 +1104,18 @@ Deno.test('upsert_osm_places', async (t) => {
       await insert(null, null)
       await insert(null, null)
     }))
+
+  await t.step('a location has at most one external source', () =>
+    withDb(async (db) => {
+      const insert = (googlePlaceId: string | null, osmId: number | null) =>
+        db.query(
+          `insert into public.location (name, latitude, longitude, location_type, google_place_id, osm_type, osm_id)
+           values ('x', 42, -71, 'cafe', $1, $2, $3)`,
+          [googlePlaceId, osmId === null ? null : 'node', osmId],
+        )
+      await assertPgError(insert('ChIJ1', 1), CHECK)
+      await insert('ChIJ1', null)
+      await insert(null, 1)
+      await insert(null, null)
+    }))
 })

@@ -2,11 +2,15 @@
 -- OSM data is licensed under the ODbL: the app must show "© OpenStreetMap contributors"
 -- wherever it displays locations that have an osm_type/osm_id.
 
+-- Each location has exactly one source: OpenStreetMap (osm_type/osm_id), Google Places from before
+-- the switch (google_place_id), or added by hand by an admin (neither). The OSM columns stay
+-- nullable for the last two, but a row can never claim more than one external source.
 alter table public.location
   add column osm_type text check (osm_type in ('node', 'way', 'relation')),
   add column osm_id bigint check (osm_id > 0),
   add constraint location_osm_ref_check check ((osm_type is null) = (osm_id is null)),
-  add constraint location_osm_ref_key unique (osm_type, osm_id);
+  add constraint location_osm_ref_key unique (osm_type, osm_id),
+  add constraint location_single_source_check check (num_nonnulls(google_place_id, osm_id) <= 1);
 
 comment on column public.location.osm_type is
   'OpenStreetMap element type. Together with osm_id identifies the source element, e.g. way/123.';

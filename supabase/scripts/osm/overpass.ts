@@ -21,6 +21,10 @@ export interface OsmElement {
   tags?: Record<string, string>
 }
 
+/**
+ * A bounding box: the rectangle of map to search, given by its edges in degrees.
+ * south/north are the bottom and top latitudes, west/east the left and right longitudes.
+ */
 export interface Bbox {
   south: number
   west: number
