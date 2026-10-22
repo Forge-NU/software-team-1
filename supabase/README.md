@@ -11,6 +11,7 @@ supabase/
   tests/
     database/          schema tests against the real migrations
     places/            edge function tests
+    lib/               app client (src/lib) tests
 ```
 
 ## Migrations
@@ -20,6 +21,7 @@ supabase/
 | `20261007013000_initial_schema.sql` | Every table from the ERD, indexes, triggers (`users` row on sign-up, `overall_ratings` recalculation) and row level security policies |
 | `20261007013100_seed_lookups.sql` | Values for the lookup tables (`location_type`, `campus`, `price_range`, `day`, `seat_type`, `capacity`, `outlet_level`, `crowd_level`, `noise_level`) |
 | `20261007013200_upsert_google_place.sql` | `upsert_google_place(jsonb)`, used by the `places` edge function to save a location, its address and hours in one transaction |
+| `20261013170000_postgis.sql` | Adds `PostGIS` and a computed `geo_location` column for distance queries |
 | `20261015161300_posts.sql` | Replaces `check_in` and `photo` with `post` and `post_photo`, the private `post-photos` bucket, and `create_post` |
 | `20261016150500_review_photos.sql` | Optional `review_photo` rows, the private `review-photos` bucket, and `attach_review_photos` |
 
@@ -86,6 +88,9 @@ npm run test:backend
 | --- | --- |
 | `tests/places/google_test.ts` | Converting Google responses (hours, address, place type, price), and the requests sent to Google |
 | `tests/places/handler_test.ts` | Each edge function route end to end, with Google and the database faked: input validation, error codes, and the caller's login being passed through |
-| `tests/database/schema_test.ts` | The real migrations running in an in-memory Postgres ([PGlite](https://pglite.dev)): constraints, cascade deletes, the ratings trigger, row level security for anon, student and admin, posts and the photo bucket, and `upsert_google_place` |
+| `tests/database/schema_test.ts` | The real migrations running in an in-memory Postgres ([PGlite](https://pglite.dev)): constraints, cascade deletes, the ratings trigger, row level security for anon, student and admin, posts and the photo bucket, `upsert_google_place`, and `nearby_locations` (radius, ordering, filters, cursor pagination, input validation) |
+| `tests/lib/places_test.ts` | `getNearbyLocations` in `src/lib/places.ts`, with PostgREST faked by running `nearby_locations` in the in-memory database: paging with `nextCursor`, filters, and pageSize/cursor validation |
 
-`tests/database/db.ts` stands in for the parts of Supabase the migrations rely on (`auth.users`, `auth.uid()`, the `anon` and `authenticated` roles, and `storage`). Each test runs inside a transaction that is rolled back afterward, so tests don't affect each other. Use `seed(db)` for a starting admin, two students, and a location with an area and seat, and `db.as(userId)` to run a query as that user (`null` for signed out).
+`tests/database/db.ts` stands in for the parts of Supabase the migrations rely on (`auth.users`, `auth.uid()`, the `anon` and `authenticated` roles, `storage`, and the `extensions` schema) and loads PGlite's PostGIS extension. Each test runs inside a transaction that is rolled back afterward, so tests don't affect each other. Use `seed(db)` for a starting admin, two students, and a location with an area and seat, and `db.as(userId)` to run a query as that user (`null` for signed out).
+
+`deno.json` maps `src/lib/supabase.ts` (which reads Expo env vars) to `tests/lib/supabase.ts`, a client pointed at a fake URL that tests answer by stubbing `fetch`.
