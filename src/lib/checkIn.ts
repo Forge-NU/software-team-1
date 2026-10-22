@@ -1,8 +1,12 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import { supabase } from './supabase'
-import { USE_MOCK_DATA } from './profile'
+import { createPost } from './posts'
 import { mockDb } from './mocks/profileMocks'
 import { mockSpots } from './mocks/checkInMocks'
+
+// Separate from profile.ts's flag so check-ins can go live on their own.
+// Real posting needs a signed-in user (F-1) since createPost() checks auth.
+export const USE_MOCK_CHECK_INS = true
 
 // ---------- Types ----------
 
@@ -36,7 +40,8 @@ export const noiseLabel = (v: Noise) => NOISE_OPTIONS.find((o) => o.value === v)
  * location (e.g. "Curry Student Center"). Check-ins attach to the seating area.
  */
 export interface SpotSummary {
-  seatingId: number
+  /** Optional: a post can be for the whole location. */
+  seatingId?: number | null
   locationId: number
   name: string
   locationName?: string | null
@@ -77,7 +82,7 @@ export async function searchSpots(query: string): Promise<SpotSummary[]> {
   const q = query.trim()
   if (!q) return []
 
-  if (USE_MOCK_DATA) {
+  if (USE_MOCK_CHECK_INS) {
     const lower = q.toLowerCase()
     return mockSpots.filter((s) => s.name.toLowerCase().includes(lower))
   }
@@ -87,7 +92,7 @@ export async function searchSpots(query: string): Promise<SpotSummary[]> {
   const { data, error } = await supabase
     .from('seating_area')
     .select('seating_id, location_id, name, location ( name )')
-    .ilike('name', `%${q.replace(/[%_]/g, '')}%`)
+    .ilike('name', `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`)
     .order('name')
     .limit(20)
   if (error) throw error
@@ -126,12 +131,15 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 /**
  * Uploads the (already compressed) photo and creates the post.
  * onProgress receives 0–1.
+ *
+ * Note: posts don't store outlets or a custom time yet, so `outlets` and
+ * `appliesAt` aren't saved (the post's created_at is used instead).
  */
 export async function submitCheckIn(
   draft: CheckInDraft,
   onProgress: (fraction: number) => void
 ): Promise<PostedCheckIn> {
-  if (USE_MOCK_DATA) {
+  if (USE_MOCK_CHECK_INS) {
     for (const p of [0.15, 0.4, 0.65, 0.85]) {
       await wait(250)
       onProgress(p)
@@ -161,14 +169,23 @@ export async function submitCheckIn(
     return posted
   }
 
-  // TODO(B-3): the check_in table exists, but it has no columns for outlets,
-  // the note, or a photo, and there's no photo storage bucket yet. Once B-3
-  // adds those, the real submit is roughly:
-  //   1. upload draft.photo.uri to the storage bucket (report progress)
-  //   2. insert into photo (seating_id, image_url)
-  //   3. insert into check_in (seating_id, crowd_level_id, noise_level_id,
-  //      checked_in_at) using crowdingDbId(draft.crowding),
-  //      noiseDbId(draft.noise) and draft.appliesAt, plus the new columns
-  //   4. return the created check-in
-  throw new Error('Posting isn’t connected yet. It needs B-3 (photo storage + check-in fields).')
+  // createPost() has no progress callback, so progress moves in stages:
+  // reading the file, then uploading + saving.
+  onProgress(0.1)
+  const file = await fetch(draft.photo.uri)
+  const data = await file.arrayBuffer()
+  onProgress(0.3)
+
+  const postId = await createPost({
+    locationId: draft.location.locationId,
+    seatingId: draft.location.seatingId ?? null,
+    crowdLevelId: crowdingDbId(draft.crowding),
+    noiseLevelId: noiseDbId(draft.noise),
+    caption: draft.note || null,
+    // compressPhoto() always outputs JPEG.
+    photos: [{ data, contentType: 'image/jpeg' }],
+  })
+  onProgress(1)
+
+  return { ...draft, postId: String(postId), postedAt: new Date().toISOString() }
 }
