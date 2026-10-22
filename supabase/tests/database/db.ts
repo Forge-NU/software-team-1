@@ -1,8 +1,10 @@
 // In-memory Postgres (PGlite) with the real migrations applied, for schema tests.
 // Stubs the pieces of Supabase the migrations depend on: the anon/authenticated
-// roles, auth.users, auth.uid() and the default grants Supabase gives those roles.
+// roles (plus service_role), auth.users, auth.uid(), storage.buckets/objects, the extensions
+// schema and the default grants Supabase gives those roles.
 
-import { PGlite } from 'npm:@electric-sql/pglite@0.3'
+import { PGlite } from 'npm:@electric-sql/pglite@0.5.8'
+import { postgis } from 'npm:@electric-sql/pglite-postgis@0.2.8'
 
 export const ADMIN = '00000000-0000-0000-0000-00000000000a'
 export const STUDENT = '00000000-0000-0000-0000-00000000000b'
@@ -11,7 +13,10 @@ export const OTHER_STUDENT = '00000000-0000-0000-0000-00000000000c'
 const SUPABASE_STUBS = `
   create role anon nologin;
   create role authenticated nologin;
+  create role service_role nologin bypassrls;
   create schema auth;
+  create schema extensions;
+  grant usage on schema extensions to anon, authenticated;
   grant usage on schema auth to anon, authenticated;
   create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb);
   create function auth.uid() returns uuid language sql stable as
@@ -21,10 +26,43 @@ const SUPABASE_STUBS = `
   alter default privileges in schema public grant all on tables to anon, authenticated;
   alter default privileges in schema public grant all on sequences to anon, authenticated;
   alter default privileges in schema public grant execute on functions to anon, authenticated;
+
+  create schema storage;
+  grant usage on schema storage to anon, authenticated;
+  create table storage.buckets (
+    id text primary key,
+    name text not null,
+    public boolean not null default false,
+    file_size_limit bigint,
+    allowed_mime_types text[]
+  );
+  create table storage.objects (
+    id uuid primary key default gen_random_uuid(),
+    bucket_id text not null references storage.buckets (id),
+    name text not null,
+    unique (bucket_id, name)
+  );
+  grant select on storage.buckets to anon, authenticated;
+  grant select, insert, update, delete on storage.objects to anon, authenticated;
+  alter table storage.objects enable row level security;
+  -- Supabase drops the filename and returns only the folders.
+  create function storage.foldername(name text)
+  returns text[]
+  language plpgsql
+  immutable
+  as $fn$
+  declare
+    parts text[];
+  begin
+    parts := string_to_array(name, '/');
+    return parts[1:array_length(parts, 1) - 1];
+  end;
+  $fn$;
+  grant execute on function storage.foldername(text) to anon, authenticated;
 `
 
 async function createDatabase(): Promise<PGlite> {
-  const pg = new PGlite()
+  const pg = new PGlite({ extensions: { postgis } })
   await pg.exec(SUPABASE_STUBS)
   const dir = new URL('../../migrations/', import.meta.url)
   const files = [...Deno.readDirSync(dir)].map((e) => e.name).filter((n) => n.endsWith('.sql')).sort()
