@@ -4,6 +4,17 @@ import type { Address, Location } from '../types/location.ts'
 
 export const RECENT_MINUTES = 90
 
+// Lookup ids from seed_lookups. Update these if those rows change.
+/** noise_level 'Quiet'; Silent and Quiet count as quiet. */
+export const QUIET_NOISE_LEVEL_ID = 2
+/** capacity 'Small (2-4)'; this size or larger fits a group. */
+export const GROUP_CAPACITY_ID = 2
+/** outlet_level 'Some'; Some and Plenty count as having chargers. */
+export const CHARGERS_OUTLET_LEVEL_ID = 2
+/** crowd_level runs from 'Empty' to 'Packed'. */
+export const EMPTY_CROWD_LEVEL_ID = 1
+export const PACKED_CROWD_LEVEL_ID = 5
+
 export interface ExploreFilters {
   quiet?: boolean
   groupStudy?: boolean
@@ -101,8 +112,8 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
     const distance = distanceMeters(opts.latitude, opts.longitude, row.latitude, row.longitude)
     if (f.locationTypes?.length && !f.locationTypes.includes(row.location_type)) continue
     if (f.priceRangeIds?.length && (row.price_range_id == null || !f.priceRangeIds.includes(row.price_range_id))) continue
-    if (f.groupStudy && !row.seating_area.some((s) => s.capacity_id >= 2 || s.seat_type === 'study_room')) continue
-    if (f.chargers && !row.seating_area.some((s) => s.outlet_level_id >= 2)) continue
+    if (f.groupStudy && !row.seating_area.some((s) => s.capacity_id >= GROUP_CAPACITY_ID || s.seat_type === 'study_room')) continue
+    if (f.chargers && !row.seating_area.some((s) => s.outlet_level_id >= CHARGERS_OUTLET_LEVEL_ID)) continue
 
     const post = latest(row.post.filter((p) => Date.parse(p.created_at) <= now), (p) => p.created_at)
     const age = post ? now - Date.parse(post.created_at) : Infinity
@@ -111,13 +122,13 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
     if (f.quiet) {
       const quietPolicy = row.area.some((a) => /quiet|silent/i.test(a.noise_policy ?? ''))
       const noise = current?.noise_level_id ?? null
-      if (noise == null ? !quietPolicy : noise > 2) continue
+      if (noise == null ? !quietPolicy : noise > QUIET_NOISE_LEVEL_ID) continue
     }
 
     const photo = latest(row.post.flatMap((p) => p.post_photo), (p) => p.created_at)
     const score =
       0.3 * Math.max(0, 1 - distance / Math.max(opts.radiusMeters, 1)) +
-      (current ? (0.5 * (5 - current.crowd_level_id)) / 4 + 0.2 * (1 - age / windowMs) : 0)
+      (current ? (0.5 * (PACKED_CROWD_LEVEL_ID - current.crowd_level_id)) / (PACKED_CROWD_LEVEL_ID - EMPTY_CROWD_LEVEL_ID) + 0.2 * (1 - age / windowMs) : 0)
 
     spots.push({
       location_id: row.location_id,
