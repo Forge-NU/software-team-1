@@ -1,24 +1,5 @@
 import { supabase } from './supabase'
 
-export interface PlaceSearchResult {
-  googlePlaceId: string
-  name: string | null
-  formattedAddress: string | null
-  latitude: number | null
-  longitude: number | null
-  primaryType: string | null
-  /** Set when this place has already been imported into Spotted. */
-  locationId: number | null
-}
-
-export interface PlaceSearchParams {
-  query: string
-  latitude?: number
-  longitude?: number
-  radiusMeters?: number
-  pageSize?: number
-}
-
 export interface Address {
   street_one: string | null
   street_two: string | null
@@ -37,6 +18,16 @@ export interface DayHours {
 export interface Location {
   location_id: number
   google_place_id: string | null
+  /**
+   * The kind of OpenStreetMap element this location was imported from, or null if it wasn't:
+   * - node: a single point, e.g. a cafe mapped as a pin
+   * - way: an outline, e.g. a building or park drawn as a shape
+   * - relation: a group of elements, e.g. a building made of several outlines or a campus
+   * Locations imported from OSM must be credited "© OpenStreetMap contributors".
+   */
+  osm_type: 'node' | 'way' | 'relation' | null
+  /** The element's id in OpenStreetMap. Only unique together with osm_type (node 1 and way 1 differ). */
+  osm_id: number | null
   name: string
   latitude: number
   longitude: number
@@ -65,37 +56,10 @@ export type LocationUpdate = Partial<
 >
 
 const LOCATION_SELECT = `
-  location_id, google_place_id, name, latitude, longitude, location_type, campus, price_range_id,
+  location_id, google_place_id, osm_type, osm_id, name, latitude, longitude, location_type, campus, price_range_id,
   address ( street_one, street_two, city, region, postal_code, country_code ),
   day_hours ( day, open_time, close_time )
 `
-
-async function invokePlaces<T>(path: string, body?: object): Promise<T> {
-  const { data, error } = await supabase.functions.invoke<T>(path, { method: 'POST', body })
-  if (error) throw error
-  return data as T
-}
-
-/** Searches Google Places. Results are not saved. */
-export async function searchPlaces(params: PlaceSearchParams): Promise<PlaceSearchResult[]> {
-  const { results } = await invokePlaces<{ results: PlaceSearchResult[] }>('places/search', params)
-  return results
-}
-
-/** Imports a Google place as a location (admin only). Re-importing refreshes it. */
-export async function importPlace(params: {
-  googlePlaceId: string
-  locationType?: string
-  campus?: string
-}): Promise<number> {
-  const { locationId } = await invokePlaces<{ locationId: number }>('places', params)
-  return locationId
-}
-
-/** Re-fetches name, coordinates, price, address and hours from Google (admin only). */
-export async function syncLocation(locationId: number): Promise<void> {
-  await invokePlaces(`places/${locationId}/sync`)
-}
 
 export async function getLocation(locationId: number): Promise<Location | null> {
   const { data, error } = await supabase
@@ -166,7 +130,7 @@ export async function getNearbyLocations(
   }
 }
 
-/** Manually edits a location (admin only). A later sync overwrites name, coordinates and price. */
+/** Manually edits a location (admin only). Re-running the OpenStreetMap import overwrites name and coordinates. */
 export async function updateLocation(locationId: number, changes: LocationUpdate): Promise<void> {
   const { error } = await supabase.from('location').update(changes).eq('location_id', locationId)
   if (error) throw error

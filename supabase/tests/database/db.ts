@@ -1,7 +1,7 @@
 // In-memory Postgres (PGlite) with the real migrations applied, for schema tests.
 // Stubs the pieces of Supabase the migrations depend on: the anon/authenticated
-// roles, auth.users, auth.uid(), storage.buckets/objects, the extensions schema and the default
-// grants Supabase gives those roles.
+// roles (plus service_role), auth.users, auth.uid(), storage.buckets/objects, the extensions
+// schema and the default grants Supabase gives those roles.
 
 import { PGlite } from 'npm:@electric-sql/pglite@0.5.8'
 import { postgis } from 'npm:@electric-sql/pglite-postgis@0.2.8'
@@ -13,6 +13,7 @@ export const OTHER_STUDENT = '00000000-0000-0000-0000-00000000000c'
 const SUPABASE_STUBS = `
   create role anon nologin;
   create role authenticated nologin;
+  create role service_role nologin bypassrls;
   create schema auth;
   create schema extensions;
   grant usage on schema extensions to anon, authenticated;
