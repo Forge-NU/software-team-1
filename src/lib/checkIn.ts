@@ -1,6 +1,7 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
-import { supabase } from './supabase'
+import * as Location from 'expo-location'
 import { createPost } from './posts'
+import { exploreSpots, type ExploreSpot } from './explore'
 import { mockDb } from './mocks/profileMocks'
 import { mockSpots } from './mocks/checkInMocks'
 
@@ -36,8 +37,8 @@ export const crowdingLabel = (v: Crowding) => CROWDING_OPTIONS.find((o) => o.val
 export const noiseLabel = (v: Noise) => NOISE_OPTIONS.find((o) => o.value === v)!.label
 
 /**
- * A "spot" is a seating_area (e.g. "Curry Study Room 201") inside a
- * location (e.g. "Curry Student Center"). Check-ins attach to the seating area.
+ * A spot to check in at. Search returns locations (from exploreSpots), so
+ * seatingId is null for those; posts can be for a whole location.
  */
 export interface SpotSummary {
   /** Optional: a post can be for the whole location. */
@@ -45,7 +46,7 @@ export interface SpotSummary {
   locationId: number
   name: string
   locationName?: string | null
-  /** Latest status, e.g. "Busy". Null until B-5 provides it. */
+  /** Latest status from a recent post, e.g. "Busy". Null when there's no recent update. */
   status?: string | null
   statusTone?: 'highlight' | 'neutral'
   reportedAt?: string | null
@@ -78,6 +79,55 @@ export interface PostedCheckIn extends CheckInDraft {
 
 // ---------- Search ----------
 
+// Used when location permission is denied or unavailable: Northeastern's campus.
+const FALLBACK_ORIGIN = { latitude: 42.3398, longitude: -71.0892 }
+const SEARCH_RADIUS_METERS = 5000
+const WALKING_METERS_PER_MINUTE = 80
+
+let cachedOrigin: { latitude: number; longitude: number } | null = null
+
+/** The user's position for distance and walk times, or the campus fallback. */
+async function searchOrigin() {
+  if (cachedOrigin) return cachedOrigin
+  try {
+    const { granted } = await Location.requestForegroundPermissionsAsync()
+    if (granted) {
+      const pos =
+        (await Location.getLastKnownPositionAsync()) ??
+        (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }))
+      cachedOrigin = { latitude: pos.coords.latitude, longitude: pos.coords.longitude }
+      return cachedOrigin
+    }
+  } catch {
+    // Fall through to the campus fallback.
+  }
+  return FALLBACK_ORIGIN
+}
+
+/** crowd_level_id → the same wording the check-in chips use. */
+function crowdStatus(id: number | null): { label: string; tone: 'highlight' | 'neutral' } | null {
+  if (id == null) return null
+  if (id <= 2) return { label: 'Nearly empty', tone: 'neutral' }
+  if (id === 3) return { label: 'Some seats', tone: 'neutral' }
+  if (id === 4) return { label: 'Busy', tone: 'highlight' }
+  return { label: 'Packed', tone: 'highlight' }
+}
+
+function toSpotSummary(spot: ExploreSpot): SpotSummary {
+  // Crowd and noise are only filled in when there's a recent (current) post.
+  const status = spot.is_current ? crowdStatus(spot.crowd_level_id) : null
+  return {
+    locationId: spot.location_id,
+    seatingId: null,
+    name: spot.name,
+    status: status?.label ?? null,
+    statusTone: status?.tone,
+    reportedAt: spot.last_updated_at,
+    noiseLabel: spot.is_current ? spot.noise_level : null,
+    walkMinutes: Math.max(1, Math.round(spot.distance_meters / WALKING_METERS_PER_MINUTE)),
+  }
+}
+
 export async function searchSpots(query: string): Promise<SpotSummary[]> {
   const q = query.trim()
   if (!q) return []
@@ -87,22 +137,15 @@ export async function searchSpots(query: string): Promise<SpotSummary[]> {
     return mockSpots.filter((s) => s.name.toLowerCase().includes(lower))
   }
 
-  // Search seating areas by name. TODO: also match on the location's name
-  // (e.g. typing "Curry" should find every seating area in Curry Student Center).
-  const { data, error } = await supabase
-    .from('seating_area')
-    .select('seating_id, location_id, name, location ( name )')
-    .ilike('name', `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`)
-    .order('name')
-    .limit(20)
-  if (error) throw error
-
-  return (data ?? []).map((row: any) => ({
-    seatingId: row.seating_id,
-    locationId: row.location_id,
-    name: row.name,
-    locationName: row.location?.name ?? null,
-  }))
+  const origin = await searchOrigin()
+  const spots = await exploreSpots({
+    ...origin,
+    radiusMeters: SEARCH_RADIUS_METERS,
+    search: q,
+    sort: 'distance',
+    limit: 20,
+  })
+  return spots.map(toSpotSummary)
 }
 
 // ---------- Photos ----------
