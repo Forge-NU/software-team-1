@@ -21,21 +21,21 @@ import {
 import { exploreSpots } from '../lib/explore';
 import { toExploreFilters } from '../lib/filterAdapter';
 
-// Stores selections made on the Filters screen
+// All selections from the Filters screen
 export type Filters = {
     atmosphere: string | null;
     locationTypes: string[];
     amenities: string[];
     priceRangeIds: number[];
 
-    // Future custom dollar-range option
+    // Future exact-dollar price option
     minPrice: number | null;
     maxPrice: number | null;
 
     accessible: boolean;
 };
 
-// Default values: nothing is selected
+// Nothing selected by default
 export const emptyFilters: Filters = {
     atmosphere: null,
     locationTypes: [],
@@ -46,23 +46,26 @@ export const emptyFilters: Filters = {
     accessible: false,
 };
 
-// Props from App.tsx or Explore
 type FiltersScreenProps = {
     initialFilters?: Filters;
+
+    // Called immediately whenever filters change
+    onFiltersChange?: (filters: Filters) => void;
+
+    // Called when Show Results is pressed
     onApply?: (filters: Filters) => void;
+
     latitude?: number;
     longitude?: number;
     radiusMeters?: number;
 };
 
-// Original noise choices
 const noiseOptions = [
     'Any noise level',
     'Quiet',
     'Social / conversation OK',
 ];
 
-// Original location choices
 const locationOptions = [
     'Campus',
     'Library',
@@ -70,7 +73,6 @@ const locationOptions = [
     'Public Space',
 ];
 
-// Original amenity choices
 const amenityOptions = [
     'Outlets',
     'Wi-Fi',
@@ -78,7 +80,6 @@ const amenityOptions = [
     'Restrooms',
 ];
 
-// Price categories supported by B-5
 const priceOptions = [
     { id: 0, label: 'Free' },
     { id: 1, label: '$' },
@@ -87,7 +88,7 @@ const priceOptions = [
     { id: 4, label: '$$$$' },
 ];
 
-// Checks if selected filters have B-5 support
+// B-5 does not support all the original UI choices
 function hasUnsupportedFilters(filters: Filters): boolean {
     return (
         filters.atmosphere === 'Social / conversation OK' ||
@@ -100,7 +101,6 @@ function hasUnsupportedFilters(filters: Filters): boolean {
     );
 }
 
-// Converts errors into readable messages
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) {
         return error.message;
@@ -119,46 +119,43 @@ function getErrorMessage(error: unknown): string {
 
 export default function FiltersScreen({
     initialFilters = emptyFilters,
+    onFiltersChange,
     onApply,
     latitude,
     longitude,
     radiusMeters = 2000,
 }: FiltersScreenProps) {
 
-    // Stores draft selections before Show Results is pressed
+    // Stores the currently selected options
     const [filters, setFilters] = useState<Filters>(() => ({
         ...emptyFilters,
         ...initialFilters,
-
-        atmosphere: initialFilters.atmosphere ?? null,
         locationTypes: [...(initialFilters.locationTypes ?? [])],
         amenities: [...(initialFilters.amenities ?? [])],
         priceRangeIds: [...(initialFilters.priceRangeIds ?? [])],
-        accessible: initialFilters.accessible ?? false,
     }));
 
-    // Stores the spot count returned from B-5
+    // Backend result count
     const [count, setCount] = useState<number | null>(null);
-
-    // Tracks whether the spot count is loading
     const [loading, setLoading] = useState(false);
-
-    // Stores errors from the backend
     const [error, setError] = useState<string | null>(null);
 
-    // Checks whether a map location has been provided
     const hasCoordinates =
         typeof latitude === 'number' &&
         Number.isFinite(latitude) &&
         typeof longitude === 'number' &&
         Number.isFinite(longitude);
 
-    // Checks whether B-5 can apply all selections
     const unsupported = hasUnsupportedFilters(filters);
 
-    // Loads the matching spot count when filters change
+    // NEW: Apply selections immediately to the parent.
+    // No need to press Show Results to save filters.
     useEffect(() => {
-        // Don't request a count that ignores selected filters
+        onFiltersChange?.(filters);
+    }, [filters, onFiltersChange]);
+
+    // Refresh the result count whenever filters change
+    useEffect(() => {
         if (!hasCoordinates || unsupported) {
             setCount(null);
             setLoading(false);
@@ -166,14 +163,12 @@ export default function FiltersScreen({
             return;
         }
 
-        // Prevents outdated requests from changing the screen
         let cancelled = false;
 
         setLoading(true);
         setCount(null);
         setError(null);
 
-        // Short delay to avoid many rapid requests
         const timer = setTimeout(async () => {
             try {
                 const backendFilters = toExploreFilters(filters);
@@ -192,13 +187,13 @@ export default function FiltersScreen({
                 });
 
                 if (!cancelled) {
+                    setCount(spots.length);
+                    setError(null);
+
                     console.log(
                         'F-4 matching spots:',
                         spots.length
                     );
-
-                    setCount(spots.length);
-                    setError(null);
                 }
             } catch (err) {
                 console.error(
@@ -230,7 +225,7 @@ export default function FiltersScreen({
         unsupported,
     ]);
 
-    // Selects or deselects a noise level
+    // Selecting the same noise option again deselects it
     const selectNoise = (value: string) => {
         setFilters((previous) => ({
             ...previous,
@@ -241,14 +236,13 @@ export default function FiltersScreen({
         }));
     };
 
-    // Selects or removes location types and amenities
+    // Toggle location or amenity selection
     const toggleMulti = (
         category: 'locationTypes' | 'amenities',
         value: string
     ) => {
         setFilters((previous) => ({
             ...previous,
-
             [category]: previous[category].includes(value)
                 ? previous[category].filter(
                     (item: string) => item !== value
@@ -257,11 +251,10 @@ export default function FiltersScreen({
         }));
     };
 
-    // Selects or removes price categories
+    // Toggle price categories
     const togglePrice = (id: number) => {
         setFilters((previous) => ({
             ...previous,
-
             priceRangeIds: previous.priceRangeIds.includes(id)
                 ? previous.priceRangeIds.filter(
                     (item: number) => item !== id
@@ -270,7 +263,7 @@ export default function FiltersScreen({
         }));
     };
 
-    // Toggles accessibility
+    // Toggle accessibility
     const toggleAccessibility = () => {
         setFilters((previous) => ({
             ...previous,
@@ -278,7 +271,7 @@ export default function FiltersScreen({
         }));
     };
 
-    // Clears every selected filter
+    // Reset immediately updates parent through onFiltersChange
     const resetFilters = () => {
         setFilters({
             ...emptyFilters,
@@ -288,8 +281,7 @@ export default function FiltersScreen({
         });
     };
 
-    // Counts every selected option
-    // "Any noise level" counts as one selected option
+    // Counts every selected option, including Any noise level
     const activeCount =
         (filters.atmosphere !== null ? 1 : 0) +
         filters.locationTypes.length +
@@ -297,7 +289,7 @@ export default function FiltersScreen({
         filters.priceRangeIds.length +
         (filters.accessible ? 1 : 0);
 
-    // Creates selectable filter cards
+    // Render a selectable filter card
     const renderOption = (
         label: string,
         selected: boolean,
@@ -313,7 +305,9 @@ export default function FiltersScreen({
                 selected && styles.selectedOption,
             ]}
             onPress={onPress}
-            accessibilityRole={isRadio ? 'radio' : 'checkbox'}
+            accessibilityRole={
+                isRadio ? 'radio' : 'checkbox'
+            }
             accessibilityState={{ checked: selected }}
         >
             <View
@@ -340,7 +334,7 @@ export default function FiltersScreen({
         </TouchableOpacity>
     );
 
-    // Creates removable active filter chips
+    // Render a removable selected filter chip
     const renderActiveChip = (
         key: string,
         label: string,
@@ -359,7 +353,6 @@ export default function FiltersScreen({
         </TouchableOpacity>
     );
 
-    // Changes the results button text
     let buttonText = 'Show results';
 
     if (loading) {
@@ -475,20 +468,6 @@ export default function FiltersScreen({
                     )}
                 </View>
 
-                {/*
-          TODO: Future custom dollar price range.
-
-          Original idea:
-            Minimum ($) – Maximum ($)
-                 5             20
-
-          B-5 currently supports price categories,
-          not exact dollar amounts.
-
-          Keep minPrice and maxPrice in the Filters
-          type for possible future implementation.
-        */}
-
                 {/* Accessibility */}
                 <Text style={styles.sectionTitle}>
                     Accessibility
@@ -502,7 +481,7 @@ export default function FiltersScreen({
                     )}
                 </View>
 
-                {/* Information from Figma */}
+                {/* Figma information */}
                 <View style={styles.infoBox}>
                     <Text style={styles.infoText}>
                         Crowding is shown separately for every spot;
@@ -511,9 +490,8 @@ export default function FiltersScreen({
                 </View>
             </ScrollView>
 
-            {/* Active filters and results */}
+            {/* Selected filters and results */}
             <View style={styles.footer}>
-
                 <Text style={styles.activeTitle}>
                     Active filters ({activeCount})
                 </Text>
@@ -523,8 +501,7 @@ export default function FiltersScreen({
                     contentContainerStyle={styles.activeContainer}
                     nestedScrollEnabled
                 >
-
-                    {/* Selected noise option */}
+                    {/* Noise level */}
                     {filters.atmosphere !== null &&
                         renderActiveChip(
                             'noise',
@@ -568,16 +545,15 @@ export default function FiltersScreen({
                             toggleAccessibility
                         )}
 
-                    {/* No active filters */}
+                    {/* Nothing selected */}
                     {activeCount === 0 && (
                         <Text style={styles.noFilters}>
                             No filters selected
                         </Text>
                     )}
-
                 </ScrollView>
 
-                {/* Missing map coordinates */}
+                {/* Missing coordinates */}
                 {!hasCoordinates && (
                     <Text style={styles.notice}>
                         Spot count will appear when Explore
@@ -585,7 +561,7 @@ export default function FiltersScreen({
                     </Text>
                 )}
 
-                {/* Unsupported selections */}
+                {/* Unsupported B-5 options */}
                 {unsupported && (
                     <Text style={styles.notice}>
                         Matching count unavailable for some
@@ -609,7 +585,7 @@ export default function FiltersScreen({
                     />
                 )}
 
-                {/* Show Results button */}
+                {/* Show Results now only navigates */}
                 <TouchableOpacity
                     style={styles.showButton}
                     onPress={() => onApply?.(filters)}
@@ -619,13 +595,11 @@ export default function FiltersScreen({
                         {buttonText}
                     </Text>
                 </TouchableOpacity>
-
             </View>
         </SafeAreaView>
     );
 }
 
-// Styles using Spotted's shared theme
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -794,7 +768,7 @@ const styles = StyleSheet.create({
         paddingBottom: spacing.lg,
         backgroundColor: colors.background,
         borderTopWidth: 1,
-        borderTopColor: colors.border,
+        borderColor: colors.border,
     },
 
     activeTitle: {
