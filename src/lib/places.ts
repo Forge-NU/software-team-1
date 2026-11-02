@@ -36,6 +36,31 @@ export async function getLocation(locationId: number): Promise<Location | null> 
   return data as Location | null
 }
 
+export interface SeatingInfo {
+  seating_id: number
+  name: string
+  outlet_level_id: number
+  near_window: boolean
+  area: {
+    name: string
+    floor: string | null
+    noise_policy: string | null
+    phone_policy: string | null
+    time_limit_minutes: number | null
+    wheelchair_accessible: boolean | null
+  } | null
+}
+
+/** Seating areas at a spot, with the floor and noise policy of the area each sits in. */
+export async function getSeatingInfo(locationId: number): Promise<SeatingInfo[]> {
+  const { data, error } = await supabase
+    .from('seating_area')
+    .select('seating_id, name, outlet_level_id, near_window, area ( name, floor, noise_policy, phone_policy, time_limit_minutes, wheelchair_accessible )')
+    .eq('location_id', locationId)
+  if (error) throw error
+  return (data ?? []) as unknown as SeatingInfo[]
+}
+
 export async function listLocations(filters: { campus?: string; locationType?: string } = {}) {
   let query = supabase.from('location').select(LOCATION_SELECT).order('name')
   if (filters.campus) query = query.eq('campus', filters.campus)
