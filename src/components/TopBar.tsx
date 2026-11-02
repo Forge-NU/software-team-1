@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { colors, layout, spacing, typography } from '../theme'
@@ -7,10 +7,11 @@ interface TopBarProps {
   title: string
   size?: 'regular' | 'large'
   onBack?: () => void
+  right?: ReactNode
 }
 
 /** White header with the "Spotted" wordmark on the left and a centered title. */
-export default function TopBar({ title, size = 'regular', onBack }: TopBarProps) {
+export default function TopBar({ title, size = 'regular', onBack, right }: TopBarProps) {
   return (
     <View style={styles.bar}>
       <View style={styles.side}>
@@ -23,7 +24,7 @@ export default function TopBar({ title, size = 'regular', onBack }: TopBarProps)
         )}
       </View>
       <Text style={[styles.title, size === 'large' && styles.titleLarge]}>{title}</Text>
-      <View style={styles.side} />
+      <View style={[styles.side, styles.sideRight]}>{right}</View>
     </View>
   )
 }
@@ -39,6 +40,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   side: { width: 90 },
+  sideRight: { alignItems: 'flex-end' },
   wordmark: { ...typography.heading, color: colors.primary },
   title: { ...typography.heading, flex: 1, textAlign: 'center', color: colors.textPrimary },
   titleLarge: { ...typography.display },

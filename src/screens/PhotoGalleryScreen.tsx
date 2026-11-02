@@ -1,10 +1,9 @@
-
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Modal,
   Pressable,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,240 +13,400 @@ import {
 import TopBar from '../components/TopBar';
 import { getLocation } from '../lib/places';
 import { getRecentPhotos } from '../lib/posts';
-import type { Location } from '../types/location';
 import type { RecentPhoto } from '../lib/posts';
-import { colors, layout, radius, spacing, typography } from '../theme';
+import type { Location } from '../types/location';
+import { colors, radius, spacing, typography } from '../theme';
 
 interface PhotoGalleryScreenProps {
   locationId: number;
   onBack: () => void;
 }
 
+function formatTime(dateString: string) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const minutes = Math.max(
+    0,
+    Math.floor((now.getTime() - date.getTime()) / 60000)
+  );
+
+  if (date.toDateString() === now.toDateString()) {
+    if (minutes < 1) return 'Today, just now';
+    if (minutes < 60) return `Today, ${minutes} min ago`;
+
+    const hours = Math.floor(minutes / 60);
+    return `Today, ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  }
+
+  if (
+    date.toDateString() ===
+    new Date(now.getTime() - 86400000).toDateString()
+  ) {
+    return 'Yesterday';
+  }
+
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 export default function PhotoGalleryScreen({
   locationId,
   onBack,
 }: PhotoGalleryScreenProps) {
-  const [spot, setSpot] = useState<Location | null>(null);
+  const [location, setLocation] = useState<Location | null>(null);
   const [photos, setPhotos] = useState<RecentPhoto[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPhoto, setSelectedPhoto] = useState<RecentPhoto | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadGallery = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-    async function loadGallery() {
-      setLoading(true);
-      setError(null);
+    try {
+      const [locationData, photoData] = await Promise.all([
+        getLocation(locationId),
+        getRecentPhotos(locationId),
+      ]);
 
-      try {
-        const [locationData, photoData] = await Promise.all([
-          getLocation(locationId),
-          getRecentPhotos(locationId),
-        ]);
+      setLocation(locationData);
+      setPhotos(photoData);
+      setCurrentIndex(0);
 
-        if (!cancelled) {
-          setSpot(locationData);
-          setPhotos(photoData);
-        }
-      } catch (err) {
-        console.error('Failed to load photo gallery:', err);
-
-        if (!cancelled) {
-          setError('Could not load photos. Please try again.');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      if (!locationData) {
+        setError('This spot could not be found.');
       }
+    } catch (err) {
+      console.error('Failed to load photo gallery:', err);
+      setError('Could not load photos. Please try again.');
+    } finally {
+      setLoading(false);
     }
-
-    loadGallery();
-
-    return () => {
-      cancelled = true;
-    };
   }, [locationId]);
 
-  return (
-    <View style={styles.container}>
-      <TopBar title="Photos" onBack={onBack} />
+  useEffect(() => {
+    loadGallery();
+  }, [loadGallery]);
 
-      <View style={styles.heading}>
-        <Text style={styles.title}>Photo gallery</Text>
-        <Text style={styles.subtitle}>
-          {spot?.name ?? 'Spot photos'}
-        </Text>
-        {!loading && !error && (
-          <Text style={styles.photoCount}>
-            {photos.length} {photos.length === 1 ? 'photo' : 'photos'}
+  function showPrevious() {
+    setCurrentIndex((index) =>
+      index === 0 ? photos.length - 1 : index - 1
+    );
+  }
+
+  function showNext() {
+    setCurrentIndex((index) =>
+      index === photos.length - 1 ? 0 : index + 1
+    );
+  }
+
+  const currentPhoto = photos[currentIndex];
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <TopBar
+        title="Recent photos"
+        right={
+          <Text style={styles.counter}>
+            {photos.length > 0
+              ? `${currentIndex + 1} of ${photos.length}`
+              : '0 photos'}
           </Text>
-        )}
-      </View>
+        }
+      />
 
       {loading ? (
-        <View style={styles.centered}>
+        <View style={styles.centerState}>
           <ActivityIndicator size="large" color={colors.primaryDark} />
-          <Text style={styles.message}>Loading photos...</Text>
+          <Text style={styles.stateText}>Loading photos...</Text>
         </View>
       ) : error ? (
-        <View style={styles.centered}>
-          <Text style={styles.message}>{error}</Text>
+        <View style={styles.centerState}>
+          <Text style={styles.stateTitle}>Unable to load gallery</Text>
+          <Text style={styles.stateText}>{error}</Text>
+
+          <Pressable style={styles.secondaryButton} onPress={loadGallery}>
+            <Text style={styles.secondaryButtonText}>Try again</Text>
+          </Pressable>
+
+          <Pressable onPress={onBack} style={styles.returnLink}>
+            <Text style={styles.linkText}>Back to spot</Text>
+          </Pressable>
         </View>
       ) : photos.length === 0 ? (
-        <View style={styles.centered}>
-          <Text style={styles.emptyIcon}>▧</Text>
-          <Text style={styles.emptyTitle}>No photos yet</Text>
-          <Text style={styles.message}>
-            Check in at this spot and share a photo to help other students.
+        <View style={styles.centerState}>
+          <Text style={styles.stateTitle}>No photos yet</Text>
+          <Text style={styles.stateText}>
+            Photos shared at this spot will appear here.
           </Text>
+
+          <Pressable style={styles.backButton} onPress={onBack}>
+            <Text style={styles.backButtonText}>Back to spot</Text>
+          </Pressable>
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.grid}
+          contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          {photos.map((photo) => (
+          {/* Location and photo details */}
+          <View style={styles.headingSection}>
+            <Text style={styles.locationTitle}>
+              {location?.name ?? 'Spot photos'}
+            </Text>
+
+            <Text style={styles.photoInfo}>
+              {currentPhoto.author_name || 'Anonymous'} ·{' '}
+              {formatTime(currentPhoto.created_at)}
+            </Text>
+          </View>
+
+          {/* Main photo */}
+          <View style={styles.mainPhotoContainer}>
+            <Image
+              key={currentPhoto.photo_id}
+              source={{ uri: currentPhoto.url }}
+              style={styles.mainPhoto}
+              resizeMode="cover"
+            />
+          </View>
+
+          {/* Previous, dots and next */}
+          <View style={styles.navigation}>
             <Pressable
-              key={photo.photo_id}
-              style={styles.photoTile}
-              onPress={() => setSelectedPhoto(photo)}
+              onPress={showPrevious}
+              style={styles.navButton}
               accessibilityRole="button"
-              accessibilityLabel="View photo full screen"
             >
-              <Image
-                source={{ uri: photo.url }}
-                style={styles.thumbnail}
-                resizeMode="cover"
-              />
+              <Text style={styles.navButtonText}>← Previous</Text>
             </Pressable>
-          ))}
+
+            <View style={styles.dots}>
+              {photos.map((photo, index) => (
+                <View
+                  key={photo.photo_id}
+                  style={[
+                    styles.dot,
+                    index === currentIndex && styles.activeDot,
+                  ]}
+                />
+              ))}
+            </View>
+
+            <Pressable
+              onPress={showNext}
+              style={styles.navButton}
+              accessibilityRole="button"
+            >
+              <Text style={styles.navButtonText}>Next →</Text>
+            </Pressable>
+          </View>
+
+          {/* Caption */}
+          {currentPhoto.caption ? (
+            <Text style={styles.caption}>{currentPhoto.caption}</Text>
+          ) : null}
+
+          {/* Thumbnails */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.carouselSection}
+            contentContainerStyle={styles.carousel}
+          >
+            {photos.map((photo, index) => (
+              <Pressable
+                key={photo.photo_id}
+                onPress={() => setCurrentIndex(index)}
+                style={[
+                  styles.thumbnailWrapper,
+                  index === currentIndex && styles.selectedThumbnail,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`View photo ${index + 1}`}
+              >
+                <Image
+                  source={{ uri: photo.url }}
+                  style={styles.thumbnail}
+                  resizeMode="cover"
+                />
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          <Pressable
+            onPress={onBack}
+            style={styles.backButton}
+            accessibilityRole="button"
+          >
+            <Text style={styles.backButtonText}>Back to spot</Text>
+          </Pressable>
         </ScrollView>
       )}
-
-      <Modal
-        visible={selectedPhoto !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedPhoto(null)}
-      >
-        <View style={styles.modal}>
-          <Pressable
-            style={styles.closeButton}
-            onPress={() => setSelectedPhoto(null)}
-            accessibilityRole="button"
-            accessibilityLabel="Close photo"
-          >
-            <Text style={styles.closeText}>✕</Text>
-          </Pressable>
-
-          {selectedPhoto && (
-            <>
-              <Image
-                source={{ uri: selectedPhoto.url }}
-                style={styles.fullImage}
-                resizeMode="contain"
-              />
-              <Text style={styles.photoDate}>
-                {new Date(selectedPhoto.created_at).toLocaleDateString()}
-              </Text>
-            </>
-          )}
-        </View>
-      </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
   },
-  heading: {
-    paddingHorizontal: layout.screenPaddingHorizontal,
+  counter: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+  },
+  content: {
+    paddingHorizontal: 20,
     paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingBottom: 36,
+    alignItems: 'center',
   },
-  title: {
+  headingSection: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  locationTitle: {
     ...typography.display,
+    textAlign: 'center',
     color: colors.textPrimary,
   },
-  subtitle: {
-    ...typography.body,
+  photoInfo: {
+    ...typography.bodySmall,
+    marginTop: spacing.xxs,
+    textAlign: 'center',
     color: colors.textSecondary,
-    marginTop: spacing.xs,
   },
-  photoCount: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
+  mainPhotoContainer: {
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.textPrimary,
+    overflow: 'hidden',
   },
-  grid: {
-    paddingHorizontal: layout.screenPaddingHorizontal,
-    paddingBottom: spacing.xl,
+  mainPhoto: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+  },
+  navigation: {
+    width: '100%',
+    maxWidth: 760,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.md,
   },
-  photoTile: {
-    width: '48%',
-    aspectRatio: 1,
+  navButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.primaryLight,
+  },
+  navButtonText: {
+    ...typography.label,
+    color: colors.textPrimary,
+  },
+  dots: {
+    flexDirection: 'row',
+    gap: spacing.xxs,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+  },
+  activeDot: {
+    backgroundColor: colors.textPrimary,
+  },
+  caption: {
+    ...typography.caption,
+    marginTop: spacing.md,
+    textAlign: 'center',
+    color: colors.textSecondary,
+  },
+  carouselSection: {
+    width: '100%',
+    maxWidth: 760,
+    marginTop: spacing.lg,
+  },
+  carousel: {
+    gap: spacing.xs,
+  },
+  thumbnailWrapper: {
+    width: 100,
+    height: 76,
     borderRadius: radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.primaryLight,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  selectedThumbnail: {
+    borderColor: colors.textPrimary,
   },
   thumbnail: {
     width: '100%',
     height: '100%',
   },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
+  backButton: {
+    marginTop: spacing.lg,
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
     alignItems: 'center',
-    padding: spacing.xl,
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.textSecondary,
+    backgroundColor: colors.surface,
   },
-  message: {
-    ...typography.body,
+  backButtonText: {
+    ...typography.bodyStrong,
+    color: colors.textPrimary,
+  },
+  centerState: {
+    flex: 1,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stateTitle: {
+    ...typography.title,
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  stateText: {
+    ...typography.bodySmall,
+    marginTop: 10,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: spacing.sm,
   },
-  emptyIcon: {
-    fontSize: 44,
+  secondaryButton: {
+    marginTop: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    backgroundColor: colors.primaryLight,
+  },
+  secondaryButtonText: {
+    ...typography.label,
     color: colors.primaryDark,
   },
-  emptyTitle: {
-    ...typography.heading,
-    color: colors.textPrimary,
-    marginTop: spacing.md,
+  returnLink: {
+    marginTop: 18,
+    padding: 8,
   },
-  modal: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.94)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 48,
-    right: 24,
-    zIndex: 1,
-    padding: spacing.sm,
-  },
-  closeText: {
-    color: '#FFFFFF',
-    fontSize: 28,
-  },
-  fullImage: {
-    width: '100%',
-    height: '75%',
-  },
-  photoDate: {
-    ...typography.bodySmall,
-    color: '#FFFFFF',
-    marginTop: spacing.md,
+  linkText: {
+    ...typography.label,
+    color: colors.primaryDark,
   },
 });

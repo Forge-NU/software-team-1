@@ -236,6 +236,48 @@ Deno.test('seating_area', async (t) => {
     }))
 })
 
+Deno.test('area amenities', async (t) => {
+  await t.step('phone policy, time limit and accessibility are optional and default to null', () =>
+    withDb(async (db) => {
+      const { areaId } = await seed(db)
+      assertEquals(
+        await db.query(
+          `select phone_policy, time_limit_minutes, wheelchair_accessible from public.area where area_id = $1`,
+          [areaId],
+        ),
+        [{ phone_policy: null, time_limit_minutes: null, wheelchair_accessible: null }],
+      )
+    }))
+
+  await t.step('they can be set', () =>
+    withDb(async (db) => {
+      const { areaId } = await seed(db)
+      await db.query(
+        `update public.area
+         set phone_policy = 'Silent mode only', time_limit_minutes = 120, wheelchair_accessible = false
+         where area_id = $1`,
+        [areaId],
+      )
+      assertEquals(
+        await db.query(
+          `select phone_policy, time_limit_minutes, wheelchair_accessible from public.area where area_id = $1`,
+          [areaId],
+        ),
+        [{ phone_policy: 'Silent mode only', time_limit_minutes: 120, wheelchair_accessible: false }],
+      )
+    }))
+
+  await t.step('time limit must be positive', () =>
+    withDb(async (db) => {
+      const { areaId } = await seed(db)
+      const set = (minutes: number) =>
+        db.query(`update public.area set time_limit_minutes = $2 where area_id = $1`, [areaId, minutes])
+      await assertPgError(set(0), CHECK)
+      await assertPgError(set(-30), CHECK)
+      await set(30)
+    }))
+})
+
 Deno.test('reviews and overall_ratings', async (t) => {
   const ratings = (db: Parameters<Parameters<typeof withDb>[0]>[0], seatingId: number) =>
     db.query(
