@@ -20,7 +20,7 @@ import {
   setVote,
 } from '../lib/votes';
 import type { PostWithVotes, VoteValue } from '../lib/votes';
-import type { Location } from '../types/location';
+import type { DayHours, Location } from '../types/location';
 import { colors, layout, radius, spacing, typography } from '../theme';
 
 // Reports older than this are labeled stale.
@@ -110,6 +110,71 @@ function formatTimeLimit(minutes: number): string {
   }
 
   return `${minutes} min`;
+}
+
+const WEEK = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
+// "08:00:00" -> "8:00am". 00:00-24:00 means open all day.
+function formatClock(time: string): string {
+  const [hourText, minuteText] = time.split(':');
+  const hour = Number(hourText);
+  const suffix = hour % 24 < 12 ? 'am' : 'pm';
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+
+  return `${displayHour}:${minuteText}${suffix}`;
+}
+
+function formatHoursRange(hours: DayHours): string {
+  if (
+    hours.open_time.startsWith('00:00') &&
+    hours.close_time.startsWith('24:00')
+  ) {
+    return 'Open 24 hours';
+  }
+
+  return `${formatClock(hours.open_time)} - ${formatClock(hours.close_time)}`;
+}
+
+// Merges consecutive days with the same hours, e.g. "Monday - Friday".
+function groupHours(
+  dayHours: DayHours[]
+): { label: string; value: string }[] {
+  const sorted = dayHours
+    .filter((hours) => WEEK.includes(hours.day))
+    .sort((a, b) => WEEK.indexOf(a.day) - WEEK.indexOf(b.day));
+
+  const groups: { first: string; last: string; value: string }[] = [];
+
+  for (const hours of sorted) {
+    const value = formatHoursRange(hours);
+    const previous = groups[groups.length - 1];
+
+    if (
+      previous &&
+      previous.value === value &&
+      WEEK.indexOf(hours.day) === WEEK.indexOf(previous.last) + 1
+    ) {
+      previous.last = hours.day;
+    } else {
+      groups.push({ first: hours.day, last: hours.day, value });
+    }
+  }
+
+  return groups.map((group) => ({
+    label:
+      group.first === group.last
+        ? group.first
+        : `${group.first} - ${group.last}`,
+    value: group.value,
+  }));
 }
 
 // Best outlet level across the spot's seating areas, or null if none are mapped.
@@ -484,16 +549,16 @@ export default function SpotDetailScreen({
               <>
                 <Text style={styles.hoursTitle}>Hours</Text>
 
-                {location.day_hours.map((hours) => (
+                {groupHours(location.day_hours).map((group) => (
                   <View
-                    key={hours.day}
+                    key={group.label}
                     style={styles.amenityRow}
                   >
                     <Text style={styles.amenityLabel}>
-                      {hours.day}
+                      {group.label}
                     </Text>
                     <Text style={styles.amenityValue}>
-                      {hours.open_time} – {hours.close_time}
+                      {group.value}
                     </Text>
                   </View>
                 ))}
@@ -641,10 +706,6 @@ export default function SpotDetailScreen({
                       ↓ {post.votes.downvotes}
                     </Text>
                   </Pressable>
-
-                  <Text style={styles.scoreText}>
-                    Score: {post.votes.score}
-                  </Text>
                 </View>
               </View>
             );
@@ -872,11 +933,6 @@ const styles = StyleSheet.create({
   },
   activeVoteText: {
     color: colors.primaryDark,
-  },
-  scoreText: {
-    ...typography.label,
-    color: colors.textSecondary,
-    marginLeft: 'auto',
   },
   actions: {
     paddingHorizontal: layout.screenPaddingHorizontal,
