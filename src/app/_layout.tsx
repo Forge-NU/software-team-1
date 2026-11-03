@@ -48,16 +48,16 @@ function RootNavigator() {
   if (!ready) return null;
 
   // Auth gate: a screen inside a guard that is false can't be opened, not even by a deep link.
-  // Signing in or out flips the guards, and Expo Router moves the user to the first allowed screen.
+  // Signing in or out flips the guards, and Expo Router sends the user to that guard's `redirectTo`.
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-      <Stack.Protected guard={isSignedIn}>
+      <Stack.Protected guard={isSignedIn} redirectTo="/sign-up">
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="spot/[id]" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="preferences" />
       </Stack.Protected>
-      <Stack.Protected guard={!isSignedIn}>
+      <Stack.Protected guard={!isSignedIn} redirectTo="/">
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
     </Stack>
