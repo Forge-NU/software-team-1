@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native'
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'
-import { searchSpots, SpotSummary } from '../../lib/checkIn'
+import { getSearchOrigin, searchSpots, SearchOrigin, SpotSummary } from '../../lib/checkIn'
 import FlowHeader from '../../components/FlowHeader'
 import Badge from '../../components/Badge'
 import { colors, layout, radius, spacing, typography } from '../../theme'
@@ -32,6 +32,13 @@ export default function SearchStep({ onPick, onCancel }: SearchStepProps) {
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Fetch the user's position fresh every time search opens, in the
+  // background, so walk times are current and typing isn't slowed down.
+  const origin = useRef<Promise<SearchOrigin> | null>(null)
+  useEffect(() => {
+    origin.current = getSearchOrigin()
+  }, [])
+
   // Debounce so we don't search on every keystroke.
   useEffect(() => {
     if (!query.trim()) {
@@ -42,7 +49,8 @@ export default function SearchStep({ onPick, onCancel }: SearchStepProps) {
     setSearching(true)
     const timer = setTimeout(async () => {
       try {
-        setResults(await searchSpots(query))
+        const from = await (origin.current ?? getSearchOrigin())
+        setResults(await searchSpots(query, from))
         setError(null)
       } catch {
         setError("Couldn't search right now. Check your connection and try again.")

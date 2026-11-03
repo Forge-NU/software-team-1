@@ -84,24 +84,34 @@ const FALLBACK_ORIGIN = { latitude: 42.3398, longitude: -71.0892 }
 const SEARCH_RADIUS_METERS = 5000
 const WALKING_METERS_PER_MINUTE = 80
 
-let cachedOrigin: { latitude: number; longitude: number } | null = null
+export interface SearchOrigin {
+  latitude: number
+  longitude: number
+  /** True when we couldn't get the user's position, so distances aren't meaningful. */
+  isFallback: boolean
+}
 
-/** The user's position for distance and walk times, or the campus fallback. */
-async function searchOrigin() {
-  if (cachedOrigin) return cachedOrigin
+// Accept a recent cached fix to keep search fast, but never an old one.
+const MAX_POSITION_AGE_MS = 60_000
+
+/**
+ * The user's current position, or the campus fallback if permission is denied.
+ * Call this each time search opens, so walk times don't go stale.
+ */
+export async function getSearchOrigin(): Promise<SearchOrigin> {
+  if (USE_MOCK_CHECK_INS) return { ...FALLBACK_ORIGIN, isFallback: true }
   try {
     const { granted } = await Location.requestForegroundPermissionsAsync()
     if (granted) {
       const pos =
-        (await Location.getLastKnownPositionAsync()) ??
+        (await Location.getLastKnownPositionAsync({ maxAge: MAX_POSITION_AGE_MS })) ??
         (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }))
-      cachedOrigin = { latitude: pos.coords.latitude, longitude: pos.coords.longitude }
-      return cachedOrigin
+      return { latitude: pos.coords.latitude, longitude: pos.coords.longitude, isFallback: false }
     }
   } catch {
     // Fall through to the campus fallback.
   }
-  return FALLBACK_ORIGIN
+  return { ...FALLBACK_ORIGIN, isFallback: true }
 }
 
 /** crowd_level_id → the same wording the check-in chips use. */
@@ -113,7 +123,7 @@ function crowdStatus(id: number | null): { label: string; tone: 'highlight' | 'n
   return { label: 'Packed', tone: 'highlight' }
 }
 
-function toSpotSummary(spot: ExploreSpot): SpotSummary {
+function toSpotSummary(spot: ExploreSpot, origin: SearchOrigin): SpotSummary {
   // Crowd and noise are only filled in when there's a recent (current) post.
   const status = spot.is_current ? crowdStatus(spot.crowd_level_id) : null
   return {
@@ -124,11 +134,14 @@ function toSpotSummary(spot: ExploreSpot): SpotSummary {
     statusTone: status?.tone,
     reportedAt: spot.last_updated_at,
     noiseLabel: spot.is_current ? spot.noise_level : null,
-    walkMinutes: Math.max(1, Math.round(spot.distance_meters / WALKING_METERS_PER_MINUTE)),
+    // Distances from the campus fallback would be misleading, so hide walk times.
+    walkMinutes: origin.isFallback
+      ? null
+      : Math.max(1, Math.round(spot.distance_meters / WALKING_METERS_PER_MINUTE)),
   }
 }
 
-export async function searchSpots(query: string): Promise<SpotSummary[]> {
+export async function searchSpots(query: string, origin: SearchOrigin): Promise<SpotSummary[]> {
   const q = query.trim()
   if (!q) return []
 
@@ -137,15 +150,15 @@ export async function searchSpots(query: string): Promise<SpotSummary[]> {
     return mockSpots.filter((s) => s.name.toLowerCase().includes(lower))
   }
 
-  const origin = await searchOrigin()
   const spots = await exploreSpots({
-    ...origin,
+    latitude: origin.latitude,
+    longitude: origin.longitude,
     radiusMeters: SEARCH_RADIUS_METERS,
     search: q,
     sort: 'distance',
     limit: 20,
   })
-  return spots.map(toSpotSummary)
+  return spots.map((spot) => toSpotSummary(spot, origin))
 }
 
 // ---------- Photos ----------
