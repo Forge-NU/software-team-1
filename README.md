@@ -66,6 +66,24 @@ OSM data is © OpenStreetMap contributors under the ODbL, so the app must show t
 
 Use the helpers in `src/lib/places.ts` from the app: `getLocation`, `listLocations`, `getNearbyLocations`, `updateLocation`, `deleteLocation`. Editing locations requires a `users` row with `user_type = 'admin'` (set it from the Supabase dashboard).
 
+## Frontend
+
+### Routes (`src/app`, Expo Router)
+Each file in `src/app` is a screen; its path is the URL. Folders in parentheses are *route groups*: they share a layout but don't appear in the URL, so `src/app/(tabs)/feed.tsx` is `/feed`.
+
+- `(tabs)/` - the tab bar (Explore, Feed, Saved, Check in, Profile). Tabs owned by later tickets are placeholders; replace the file's contents when you build yours.
+- `spot/[id].tsx` - spot detail. Open it with `router.push({ pathname: '/spot/[id]', params: { id: String(locationId) } })`.
+- `settings.tsx`, `preferences.tsx` - pushed on top of the tabs.
+
+Keep route files thin: build the screen in `src/screens/` with navigation passed in as callbacks (see `(tabs)/profile.tsx`), so screens don't depend on the router.
+
+### Styling
+All colors, fonts, sizes, spacing and radii live in `src/theme`, which matches the Figma Style Guide. Never hardcode a hex value or font name; if you need a new one, add it to `src/theme` first.
+
+- **Text:** use `<Text variant="heading" color="textSecondary">` from `@/components/ui`. It applies the Afacad font and the type scale for you.
+- **Layout:** NativeWind classes are generated from the same theme: `bg-primaryDark`, `text-textSecondary`, `border-border`, `p-md`, `gap-lg`, `px-gutter`, `rounded-xl`. `StyleSheet` with `import { colors, spacing } from '../theme'` works too and uses the same values.
+- **Shared components:** `Button`, `TextField`, `Screen`, `Text` from `@/components/ui`, and `TopBar` from `@/components/TopBar`. `TopBar` pads the notch itself, so don't wrap it in a `SafeAreaView`.
+
 ## Repo Structure
 ```
 /src        - application code (screens, components, lib)
@@ -75,7 +93,7 @@ Use the helpers in `src/lib/places.ts` from the app: `getLocation`, `listLocatio
 ```
 
 ## Design Docs
-Link to Figma / design review slides / architecture doc here.
+[Figma](https://www.figma.com/design/yX0wiDHzvE7jNMMob78Sfd/Spotted): Hi-Fis for screens, Style Guide and Components for tokens.
 
 ## Contributing
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for our git workflow and how to open a ticket.
