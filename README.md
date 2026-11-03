@@ -87,6 +87,9 @@ All colors, fonts, sizes, spacing and radii live in `src/theme`, which matches t
 ### Auth
 `useAuth()` from `@/context/AuthContext` gives `session`, `isSignedIn`, `signIn`, `signUp` and `signOut`. The root layout's auth gate (`src/app/_layout.tsx`) only lets signed-out users reach `(auth)`; signing in or out moves them automatically, so screens never navigate after auth themselves. Forms use React Hook Form + Zod (schemas in `src/lib/validation`) with `FormTextField` for inline errors.
 
+### Mock data
+Until a screen is wired to the real API (F-7, #37), import from `@/mocks`: `mockLocations`, `mockPosts`, `getMockLocation`, `getMockPostsForLocation`. They use the real `Location` and `Post` types, so switching to live data doesn't change your screen. Lookup labels (crowd, noise, price) are in `@/constants/lookups`.
+
 ## Repo Structure
 ```
 /src        - application code (screens, components, lib)

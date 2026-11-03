@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { PlaceholderScreen } from '@/components/PlaceholderScreen';
+import { getMockLocation } from '@/mocks';
 
 // Open a spot from anywhere with:
 //   router.push({ pathname: '/spot/[id]', params: { id: String(locationId) } })
@@ -8,6 +9,7 @@ import { PlaceholderScreen } from '@/components/PlaceholderScreen';
 export default function SpotRoute() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const spot = getMockLocation(Number(id));
 
-  return <PlaceholderScreen title={`Spot ${id}`} ticket="F-5" onBack={router.back} />;
+  return <PlaceholderScreen title={spot?.name ?? `Spot ${id}`} ticket="F-5" onBack={router.back} />;
 }
