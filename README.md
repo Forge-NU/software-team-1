@@ -84,6 +84,9 @@ All colors, fonts, sizes, spacing and radii live in `src/theme`, which matches t
 - **Layout:** NativeWind classes are generated from the same theme: `bg-primaryDark`, `text-textSecondary`, `border-border`, `p-md`, `gap-lg`, `px-gutter`, `rounded-xl`. `StyleSheet` with `import { colors, spacing } from '../theme'` works too and uses the same values.
 - **Shared components:** `Button`, `TextField`, `Screen`, `Text` from `@/components/ui`, and `TopBar` from `@/components/TopBar`. `TopBar` pads the notch itself, so don't wrap it in a `SafeAreaView`.
 
+### Auth
+`useAuth()` from `@/context/AuthContext` gives `session`, `isSignedIn`, `signIn`, `signUp` and `signOut`. The root layout's auth gate (`src/app/_layout.tsx`) only lets signed-out users reach `(auth)`; signing in or out moves them automatically, so screens never navigate after auth themselves. Forms use React Hook Form + Zod (schemas in `src/lib/validation`) with `FormTextField` for inline errors.
+
 ## Repo Structure
 ```
 /src        - application code (screens, components, lib)

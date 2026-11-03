@@ -11,7 +11,8 @@ export default function ProfileRoute() {
       onOpenSettings={() => router.push('/settings')}
       onOpenPreferences={() => router.push('/preferences')}
       onFindSpot={() => router.navigate('/')}
-      onSignedOut={() => router.navigate('/')}
+      // Signing out ends the session; the auth gate in app/_layout.tsx then shows sign in
+      onSignedOut={() => {}}
     />
   );
 }

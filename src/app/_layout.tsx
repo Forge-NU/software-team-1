@@ -12,13 +12,26 @@ import {
   useFonts,
 } from '@expo-google-fonts/afacad';
 
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ProfileProvider } from '@/context/ProfileContext';
 import { colors } from '@/theme';
 
-// Keep the splash screen up until the fonts are ready
+// Keep the splash screen up until the fonts and the saved session are ready
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <ProfileProvider>
+        <RootNavigator />
+        <StatusBar style="dark" />
+      </ProfileProvider>
+    </AuthProvider>
+  );
+}
+
+function RootNavigator() {
+  const { isSignedIn, isLoading } = useAuth();
   const [fontsLoaded, fontError] = useFonts({
     Afacad_400Regular,
     Afacad_500Medium,
@@ -26,7 +39,7 @@ export default function RootLayout() {
     Afacad_700Bold,
   });
   // If the fonts fail to load, carry on with the system font rather than hang on the splash
-  const ready = fontsLoaded || fontError !== null;
+  const ready = !isLoading && (fontsLoaded || fontError !== null);
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
@@ -34,10 +47,19 @@ export default function RootLayout() {
 
   if (!ready) return null;
 
+  // Auth gate: a screen inside a guard that is false can't be opened, not even by a deep link.
+  // Signing in or out flips the guards, and Expo Router moves the user to the first allowed screen.
   return (
-    <ProfileProvider>
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
-      <StatusBar style="dark" />
-    </ProfileProvider>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+      <Stack.Protected guard={isSignedIn}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="spot/[id]" />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="preferences" />
+      </Stack.Protected>
+      <Stack.Protected guard={!isSignedIn}>
+        <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+    </Stack>
   );
 }
