@@ -44,7 +44,7 @@ npx expo start
 Scan the QR code with Expo Go, or press `i` / `a` for iOS/Android simulator.
 
 ## Backend (Supabase)
-Database schema and edge functions live in `/supabase`. To pull the latest schema locally:
+Database schema, scripts and tests live in `/supabase`. To pull the latest schema locally:
 ```bash
 npx supabase link --project-ref tjgrlbbozelcpyjvdbve
 npx supabase db pull
@@ -55,24 +55,21 @@ To apply the schema in `supabase/migrations` to the linked project:
 npx supabase db push
 ```
 
-### Google Places
-Location data is imported from the Google Places API (New) by the `places` edge function, so the API key never ships in the app. Importing and syncing places requires a `users` row with `user_type = 'admin'` (set it from the Supabase dashboard).
+### Location data
+Locations are imported from [OpenStreetMap](https://www.openstreetmap.org) with a script (see [supabase/README.md](supabase/README.md#importing-places-from-openstreetmap)):
 
 ```bash
-# deploy
-npx supabase secrets set GOOGLE_PLACES_API_KEY=your-key
-npx supabase functions deploy places
-
-# run locally (copy supabase/functions/.env.example to supabase/functions/.env first)
-npx supabase functions serve places
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run import:osm
 ```
 
-Use the helpers in `src/lib/places.ts` from the app: `searchPlaces`, `importPlace`, `syncLocation`, `getLocation`, `listLocations`, `updateLocation`, `deleteLocation`.
+OSM data is © OpenStreetMap contributors under the ODbL, so the app must show that credit wherever it displays these locations.
+
+Use the helpers in `src/lib/places.ts` from the app: `getLocation`, `listLocations`, `getNearbyLocations`, `updateLocation`, `deleteLocation`. Editing locations requires a `users` row with `user_type = 'admin'` (set it from the Supabase dashboard).
 
 ## Repo Structure
 ```
 /src        - application code (screens, components, lib)
-/supabase   - database migrations, edge functions, config
+/supabase   - database migrations, scripts, tests, config
 /docs       - design docs, architecture decisions
 /.github    - issue templates, PR template
 ```
