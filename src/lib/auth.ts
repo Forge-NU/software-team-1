@@ -42,3 +42,19 @@ export async function signIn(
 export async function signOut() {
   return await supabase.auth.signOut(); // end session
 }
+
+/**
+ * Deletes the signed-in user's account and data via the delete-account Edge
+ * Function, then clears the local session. The service role stays server-side.
+ */
+export async function deleteMyAccount(): Promise<void> {
+  const { error } = await supabase.functions.invoke('delete-account', {
+    method: 'POST',
+  });
+  if (error) {
+    throw new Error(error.message || "Couldn't delete your account. Try again.");
+  }
+
+  const { error: signOutError } = await signOut();
+  if (signOutError) throw signOutError;
+}
