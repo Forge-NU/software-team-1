@@ -68,7 +68,7 @@ export default function SignInScreen() {
         autoComplete="current-password"
         textContentType="password"
         returnKeyType="go"
-        onSubmitEditing={onSubmit}
+        onSubmitEditing={() => onSubmit()}
       />
     </AuthScaffold>
   );

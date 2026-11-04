@@ -1,4 +1,4 @@
-import { useState, type Ref } from 'react';
+import { useState, type ComponentRef, type Ref } from 'react';
 import { TextInput, View, type TextInputProps } from 'react-native';
 
 import { colors, typography } from '@/theme';
@@ -11,7 +11,7 @@ export interface TextFieldProps extends TextInputProps {
   error?: string;
   /** Hint under the input, e.g. password rules */
   helper?: string;
-  ref?: Ref<TextInput>;
+  ref?: Ref<ComponentRef<typeof TextInput>>;
 }
 
 /** Labeled input from the Figma "Input field" component. */
