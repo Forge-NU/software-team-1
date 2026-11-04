@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { supabase } from './supabase'
 import { mockDb } from './mocks/profileMocks'
 
@@ -118,6 +119,60 @@ export async function getMyCheckIns(userId: string): Promise<CheckIn[]> {
     score: row.score ?? 0,
     details: [],
   }))
+}
+
+// ---------- Study preferences (B-7) ----------
+
+export const AMENITIES = ['outlets', 'wifi', 'whiteboards', 'food_drinks'] as const
+export type Amenity = (typeof AMENITIES)[number]
+
+const PreferencesSchema = z.object({
+  /** A noise_level id, or null for no preference. */
+  preferredNoise: z.number().int().min(1).max(5).nullable(),
+  preferredAmenities: z.array(z.enum(AMENITIES)),
+  notifySavedUpdates: z.boolean(),
+})
+
+export type Preferences = z.infer<typeof PreferencesSchema>
+
+const NO_PREFERENCES: Preferences = { preferredNoise: null, preferredAmenities: [], notifySavedUpdates: false }
+
+/** The signed-in user's preferences. New users get no preferences, never an error. */
+export async function getPreferences(): Promise<Preferences> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('You are signed out. Sign in again to continue.')
+
+  const { data, error } = await supabase
+    .from(USERS_TABLE)
+    .select('preferred_noise, preferred_amenities, notify_saved_updates')
+    .eq(USER_ID_COL, user.id)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return { ...NO_PREFERENCES }
+
+  return PreferencesSchema.parse({
+    preferredNoise: data.preferred_noise,
+    preferredAmenities: data.preferred_amenities ?? [],
+    notifySavedUpdates: data.notify_saved_updates,
+  })
+}
+
+/** Saves the signed-in user's preferences. */
+export async function updatePreferences(preferences: Preferences): Promise<void> {
+  const valid = PreferencesSchema.parse(preferences)
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('You are signed out. Sign in again to continue.')
+
+  const { error } = await supabase
+    .from(USERS_TABLE)
+    .update({
+      preferred_noise: valid.preferredNoise,
+      preferred_amenities: valid.preferredAmenities,
+      notify_saved_updates: valid.notifySavedUpdates,
+    })
+    .eq(USER_ID_COL, user.id)
+  if (error) throw error
 }
 
 export async function signOut(): Promise<void> {
