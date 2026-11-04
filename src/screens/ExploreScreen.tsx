@@ -19,6 +19,7 @@ import type { ExploreSpot } from '../lib/explore';
 
 type ExploreScreenProps = {
     onOpenFilters?: () => void;
+    onOpenSpot?: (locationId: number) => void;
     latitude?: number;
     longitude?: number;
 };
@@ -53,6 +54,7 @@ function updatedAgo(iso: string | null): string {
 
 export default function ExploreScreen({
     onOpenFilters,
+    onOpenSpot,
     latitude = NU_CAMPUS.latitude,
     longitude = NU_CAMPUS.longitude,
 }: ExploreScreenProps) {
@@ -96,8 +98,14 @@ export default function ExploreScreen({
         };
     }, [filters, latitude, longitude]);
 
+    // Each card opens that spot's detail page when tapped
     const renderSpot = ({ item }: { item: ExploreSpot }) => (
-        <View style={styles.card}>
+        <TouchableOpacity
+            style={styles.card}
+            onPress={() => onOpenSpot?.(item.location_id)}
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${item.name}`}
+        >
             <Text style={styles.cardTitle}>{item.name}</Text>
             <Text style={styles.cardMeta}>
                 {typeLabels[item.location_type] ?? item.location_type}, {walkTime(item.distance_meters)}
@@ -113,7 +121,7 @@ export default function ExploreScreen({
             )}
 
             <Text style={styles.cardUpdated}>{updatedAgo(item.last_updated_at)}</Text>
-        </View>
+        </TouchableOpacity>
     );
 
     const renderEmpty = () => {
