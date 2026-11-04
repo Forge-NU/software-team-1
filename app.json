@@ -2,6 +2,7 @@
   "expo": {
     "name": "Spotted",
     "slug": "spotted",
+    "scheme": "spotted",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -22,7 +23,10 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-router",
+      "expo-font",
+      "expo-splash-screen",
+      "expo-status-bar"
     ]
   }
 }

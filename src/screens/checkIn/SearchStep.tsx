@@ -92,14 +92,14 @@ export default function SearchStep({ onPick, onCancel }: SearchStepProps) {
               <Text style={styles.resultsTitle}>Results for “{trimmed}”</Text>
               {searching && <ActivityIndicator size="small" color={colors.primaryDark} />}
             </View>
-          ) : null
+          ) : undefined
         }
         ListEmptyComponent={
           trimmed && !searching ? (
             <Text style={styles.emptyText}>
               {error ?? `No spots match “${trimmed}”. Try a building name like Snell or Curry.`}
             </Text>
-          ) : null
+          ) : undefined
         }
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => (
