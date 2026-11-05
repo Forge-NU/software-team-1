@@ -123,8 +123,13 @@ export async function getMyCheckIns(userId: string): Promise<CheckIn[]> {
 
 // ---------- Study preferences (B-7) ----------
 
+const PREFERENCES_TABLE = 'user_preferences'
+
 export const AMENITIES = ['outlets', 'wifi', 'whiteboards', 'food_drinks'] as const
 export type Amenity = (typeof AMENITIES)[number]
+
+/** Onboarding's "Preferred atmosphere", as noise_level ids (seed_lookups: 2 Quiet, 4 Loud). */
+export const ATMOSPHERE_NOISE_LEVEL = { quiet: 2, social: 4 } as const
 
 const PreferencesSchema = z.object({
   /** A noise_level id, or null for no preference. */
@@ -137,42 +142,70 @@ export type Preferences = z.infer<typeof PreferencesSchema>
 
 const NO_PREFERENCES: Preferences = { preferredNoise: null, preferredAmenities: [], notifySavedUpdates: false }
 
-/** The signed-in user's preferences. New users get no preferences, never an error. */
+let mockPreferences: Preferences = { ...NO_PREFERENCES }
+
+interface PreferencesRow {
+  preferred_noise: number | null
+  preferred_amenities: string[] | null
+  notify_saved_updates: boolean
+}
+
+function fromRow(row: PreferencesRow): Preferences {
+  return PreferencesSchema.parse({
+    preferredNoise: row.preferred_noise,
+    // Drop values this app version doesn't know, so a new amenity added later can't break reads
+    preferredAmenities: (row.preferred_amenities ?? []).filter((a): a is Amenity =>
+      (AMENITIES as readonly string[]).includes(a),
+    ),
+    notifySavedUpdates: row.notify_saved_updates,
+  })
+}
+
+/** The signed-in user's preferences. A new user has none, which is not an error. */
 export async function getPreferences(): Promise<Preferences> {
+  if (USE_MOCK_DATA) return { ...mockPreferences }
+
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('You are signed out. Sign in again to continue.')
 
   const { data, error } = await supabase
-    .from(USERS_TABLE)
+    .from(PREFERENCES_TABLE)
     .select('preferred_noise, preferred_amenities, notify_saved_updates')
-    .eq(USER_ID_COL, user.id)
+    .eq('user_id', user.id)
     .maybeSingle()
   if (error) throw error
-  if (!data) return { ...NO_PREFERENCES }
-
-  return PreferencesSchema.parse({
-    preferredNoise: data.preferred_noise,
-    preferredAmenities: data.preferred_amenities ?? [],
-    notifySavedUpdates: data.notify_saved_updates,
-  })
+  return data ? fromRow(data as PreferencesRow) : { ...NO_PREFERENCES }
 }
 
-/** Saves the signed-in user's preferences. */
-export async function updatePreferences(preferences: Preferences): Promise<void> {
-  const valid = PreferencesSchema.parse(preferences)
+/**
+ * Saves only the fields passed in (e.g. just the Settings notification toggle),
+ * and returns the full saved preferences.
+ */
+export async function updatePreferences(changes: Partial<Preferences>): Promise<Preferences> {
+  const valid = PreferencesSchema.partial().parse(changes)
+
+  if (USE_MOCK_DATA) {
+    mockPreferences = { ...mockPreferences, ...valid }
+    return { ...mockPreferences }
+  }
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('You are signed out. Sign in again to continue.')
 
-  const { error } = await supabase
-    .from(USERS_TABLE)
-    .update({
-      preferred_noise: valid.preferredNoise,
-      preferred_amenities: valid.preferredAmenities,
-      notify_saved_updates: valid.notifySavedUpdates,
-    })
-    .eq(USER_ID_COL, user.id)
+  const row: Record<string, unknown> = { user_id: user.id }
+  if (valid.preferredNoise !== undefined) row.preferred_noise = valid.preferredNoise
+  if (valid.preferredAmenities !== undefined) row.preferred_amenities = valid.preferredAmenities
+  if (valid.notifySavedUpdates !== undefined) row.notify_saved_updates = valid.notifySavedUpdates
+
+  // Creates the row on first save; afterwards only the columns sent here change
+  const { data, error } = await supabase
+    .from(PREFERENCES_TABLE)
+    .upsert(row, { onConflict: 'user_id' })
+    .select('preferred_noise, preferred_amenities, notify_saved_updates')
+    .maybeSingle()
   if (error) throw error
+  if (!data) throw new Error('Your preferences weren’t saved. Try again.')
+  return fromRow(data as PreferencesRow)
 }
 
 export async function signOut(): Promise<void> {
