@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import TopBar from '../components/TopBar';
 import { getLocation, getSeatingInfo } from '../lib/places';
@@ -197,6 +198,7 @@ export default function SpotDetailScreen({
   const [photos, setPhotos] = useState<RecentPhoto[]>([]);
   const [seating, setSeating] = useState<SeatingInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const { bottom } = useSafeAreaInsets();
 
   async function loadSpotDetails() {
     try {
@@ -714,7 +716,12 @@ export default function SpotDetailScreen({
       </ScrollView>
 
       {/* Main actions */}
-      <View style={styles.actions}>
+      <View
+        style={[
+          styles.actions,
+          { paddingBottom: spacing.md + bottom },
+        ]}
+      >
         <Pressable
           onPress={() => onCheckIn(locationId)}
           style={styles.checkInButton}

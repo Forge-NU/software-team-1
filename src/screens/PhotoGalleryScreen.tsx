@@ -3,12 +3,12 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import TopBar from '../components/TopBar';
 import { getLocation } from '../lib/places';
@@ -102,10 +102,12 @@ export default function PhotoGalleryScreen({
     );
   }
 
+  const { bottom } = useSafeAreaInsets();
+
   const currentPhoto = photos[currentIndex];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <TopBar
         title="Recent photos"
         right={
@@ -148,7 +150,10 @@ export default function PhotoGalleryScreen({
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: styles.content.paddingBottom + bottom },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           {/* Location and photo details */}
@@ -245,7 +250,7 @@ export default function PhotoGalleryScreen({
           </Pressable>
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
