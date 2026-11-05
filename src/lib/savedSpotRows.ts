@@ -1,17 +1,16 @@
 // Pure mapping for saved spots. Only type imports and constants, so the backend
 // tests can run it (same approach as exploreRanking.ts).
 
+import type { Address, Location } from '../types/location.ts'
 import { RECENT_MINUTES } from './exploreRanking.ts'
 
-export interface SavedSpot {
-  location_id: number
-  name: string
-  location_type: string
-  campus: string | null
-  latitude: number
-  longitude: number
-  street_one: string | null
-  city: string | null
+type LocationFields = Pick<
+  Location,
+  'location_id' | 'name' | 'location_type' | 'campus' | 'latitude' | 'longitude'
+>
+type AddressFields = Pick<Address, 'street_one' | 'city'>
+
+export interface SavedSpot extends LocationFields, AddressFields {
   /** When the user saved it. */
   saved_at: string
   /** False means "no recent updates": crowd and noise are null. Same rule as Explore. */
@@ -34,16 +33,10 @@ export interface SavedSpotPost {
 
 export interface SavedSpotRow {
   created_at: string
-  location: {
-    location_id: number
-    name: string
-    location_type: string
-    campus: string | null
-    latitude: number
-    longitude: number
-    address: { street_one: string | null; city: string | null } | null
+  location: (LocationFields & {
+    address: AddressFields | null
     post: SavedSpotPost[]
-  } | null
+  }) | null
 }
 
 function latest(posts: SavedSpotPost[]): SavedSpotPost | null {
