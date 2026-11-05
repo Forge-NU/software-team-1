@@ -96,6 +96,60 @@ Deno.test('removeFolder / removeUserStorage', async (t) => {
     await removeUserStorage(fakeStorageClient(objects), USER_A, ['post-photos'])
     assertEquals(objects['post-photos'], [])
   })
+
+  await t.step('still deletes files that sit past a full page of folders', async () => {
+    const nested = Array.from({ length: 100 }, (_, i) => `${USER_A}/dir${String(i).padStart(3, '0')}/a.jpg`)
+    const objects: Stored = { 'post-photos': [...nested, `${USER_A}/after-folders.jpg`] }
+    await removeFolder(fakeStorageClient(objects), 'post-photos', USER_A)
+    assertEquals(objects['post-photos'], [])
+  })
+
+  await t.step('stops instead of looping when a page never shrinks', async () => {
+    const client = {
+      storage: {
+        from() {
+          return {
+            async list() {
+              return { data: [{ name: 'stuck.jpg', id: 'id-stuck' }], error: null }
+            },
+            async remove() {
+              return { data: [], error: null }
+            },
+          }
+        },
+      },
+    } as unknown as SupabaseClient
+
+    await assertRejects(
+      () => removeFolder(client, 'post-photos', USER_A),
+      HttpError,
+      `Storage cleanup stalled under ${USER_A}`,
+    )
+  })
+
+  await t.step('stops instead of looping when a folder prefix never disappears', async () => {
+    const client = {
+      storage: {
+        from() {
+          return {
+            async list(folder: string) {
+              if (folder === USER_A) return { data: [{ name: 'ghost', id: null }], error: null }
+              return { data: [], error: null }
+            },
+            async remove() {
+              return { data: [], error: null }
+            },
+          }
+        },
+      },
+    } as unknown as SupabaseClient
+
+    await assertRejects(
+      () => removeFolder(client, 'post-photos', USER_A),
+      HttpError,
+      `Storage cleanup stalled under ${USER_A}`,
+    )
+  })
 })
 
 Deno.test('deleteAuthUser', async (t) => {

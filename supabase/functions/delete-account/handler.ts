@@ -33,31 +33,47 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
-/** List+remove every file under `folder/` (and nested folders), paginating until empty. */
+/**
+ * List and remove every file under `folder/`, including nested prefixes.
+ *
+ * Always re-lists from the start (`offset: 0`) because a removed page shifts
+ * what comes next. A page of only folders must not end the scan — files can
+ * sit past it. If a page comes back unchanged, stop with an error instead of
+ * looping forever.
+ */
 export async function removeFolder(
   client: SupabaseClient,
   bucket: string,
   folder: string,
 ): Promise<void> {
   const limit = 100
+  let previousSignature: string | null = null
 
   for (;;) {
     const { data, error } = await client.storage.from(bucket).list(folder, { limit, offset: 0 })
     if (error) throw new HttpError(500, `Storage list failed: ${error.message}`)
     if (!data?.length) return
 
+    const signature = data.map((item) => `${item.id ?? ''}:${item.name}`).join('\0')
+    if (signature === previousSignature) {
+      throw new HttpError(500, `Storage cleanup stalled under ${folder}`)
+    }
+    previousSignature = signature
+
     const filePaths: string[] = []
+    const childFolders: string[] = []
     for (const item of data) {
       const path = `${folder}/${item.name}`
-      // Folders have no id; files do. Recurse into nested prefixes if any appear.
-      if (item.id == null) {
-        await removeFolder(client, bucket, path)
-      } else {
-        filePaths.push(path)
-      }
+      // Folders have no id; files do.
+      if (item.id == null) childFolders.push(path)
+      else filePaths.push(path)
     }
 
-    if (filePaths.length === 0) return
+    for (const child of childFolders) {
+      await removeFolder(client, bucket, child)
+    }
+
+    if (filePaths.length === 0) continue
 
     const { error: removeError } = await client.storage.from(bucket).remove(filePaths)
     if (removeError) throw new HttpError(500, `Storage remove failed: ${removeError.message}`)
