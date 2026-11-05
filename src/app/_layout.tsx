@@ -14,6 +14,7 @@ import {
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ProfileProvider } from '@/context/ProfileContext';
+import { useWelcomeSeen } from '@/lib/onboarding';
 import { colors } from '@/theme';
 
 // Keep the splash screen up until the fonts and the saved session are ready
@@ -32,6 +33,7 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { isSignedIn, isLoading } = useAuth();
+  const welcomeSeen = useWelcomeSeen();
   const [fontsLoaded, fontError] = useFonts({
     Afacad_400Regular,
     Afacad_500Medium,
@@ -39,7 +41,7 @@ function RootNavigator() {
     Afacad_700Bold,
   });
   // If the fonts fail to load, carry on with the system font rather than hang on the splash
-  const ready = !isLoading && (fontsLoaded || fontError !== null);
+  const ready = !isLoading && welcomeSeen !== null && (fontsLoaded || fontError !== null);
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
@@ -51,7 +53,8 @@ function RootNavigator() {
   // Signing in or out flips the guards, and Expo Router sends the user to that guard's `redirectTo`.
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-      <Stack.Protected guard={isSignedIn} redirectTo="/sign-up">
+      {/* Signed-out users see the welcome carousel once (F-8), then sign up */}
+      <Stack.Protected guard={isSignedIn} redirectTo={welcomeSeen ? '/sign-up' : '/welcome'}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="spot/[id]" />
         <Stack.Screen name="settings" />

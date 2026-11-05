@@ -4,13 +4,15 @@ import { colors } from '@/theme';
 
 import { Text } from './Text';
 
-type Variant = 'primary' | 'secondary';
+type Variant = 'primary' | 'secondary' | 'outline';
 
 const variants = {
   // Figma "BtnBlock" ("Create account")
   primary: { container: 'bg-primaryDark', label: 'textOnPrimary' },
   // Figma "BtnPrimary" ("Sign in with Northeastern")
   secondary: { container: 'bg-primaryLight', label: 'textOnPrimaryLight' },
+  // Figma white button with a blue label ("Skip for now", "Not now")
+  outline: { container: 'bg-surface', label: 'textOnPrimaryLight' },
 } as const;
 
 export interface ButtonProps {

@@ -1,9 +1,10 @@
-import type { ComponentProps } from 'react';
+import { useEffect, type ComponentProps } from 'react';
 import { View } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { takePreferencesPending } from '@/lib/onboarding';
 import { colors, typography } from '@/theme';
 
 type IconName = ComponentProps<typeof Feather>['name'];
@@ -35,6 +36,14 @@ function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
 
 export default function TabLayout() {
   const { bottom } = useSafeAreaInsets();
+  const router = useRouter();
+
+  // Right after sign up, open Study preferences (F-8) over Explore, once
+  useEffect(() => {
+    takePreferencesPending().then((pending) => {
+      if (pending) router.push('/preferences');
+    });
+  }, [router]);
 
   return (
     <Tabs
