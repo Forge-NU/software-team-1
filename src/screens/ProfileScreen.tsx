@@ -239,7 +239,7 @@ export default function ProfileScreen({
         data={checkIns}
         keyExtractor={(item) => item.postId}
         ListHeaderComponent={header}
-        ListEmptyComponent={empty}
+        ListEmptyComponent={empty ?? undefined}
         ListFooterComponent={footer}
         refreshing={loading && count > 0}
         onRefresh={load}
