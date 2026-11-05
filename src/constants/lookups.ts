@@ -18,6 +18,19 @@ export const NOISE_LEVELS = {
   5: 'Very loud',
 } as const;
 
+export const OUTLET_LEVELS = {
+  0: 'None',
+  1: 'Few',
+  2: 'Some',
+  3: 'Plenty',
+} as const;
+
+export const PHONE_POLICIES = {
+  0: 'No Phone Calls Allowed',
+  1: 'Quiet Phone Calls Only',
+  2: 'Phone Calls Allowed',
+} as const;
+
 export const PRICE_RANGES = {
   0: 'Free',
   1: '$',
@@ -28,4 +41,6 @@ export const PRICE_RANGES = {
 
 export type CrowdLevelId = keyof typeof CROWD_LEVELS;
 export type NoiseLevelId = keyof typeof NOISE_LEVELS;
+export type OutletLevelId = keyof typeof OUTLET_LEVELS;
+export type PhonePolicyId = keyof typeof PHONE_POLICIES;
 export type PriceRangeId = keyof typeof PRICE_RANGES;

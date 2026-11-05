@@ -45,7 +45,7 @@ export interface SeatingInfo {
     name: string
     floor: string | null
     noise_policy: string | null
-    phone_policy: string | null
+    phone_policy_id: number | null
     time_limit_minutes: number | null
     wheelchair_accessible: boolean | null
   } | null
@@ -55,7 +55,7 @@ export interface SeatingInfo {
 export async function getSeatingInfo(locationId: number): Promise<SeatingInfo[]> {
   const { data, error } = await supabase
     .from('seating_area')
-    .select('seating_id, name, outlet_level_id, near_window, area ( name, floor, noise_policy, phone_policy, time_limit_minutes, wheelchair_accessible )')
+    .select('seating_id, name, outlet_level_id, near_window, area ( name, floor, noise_policy, phone_policy_id, time_limit_minutes, wheelchair_accessible )')
     .eq('location_id', locationId)
   if (error) throw error
   return (data ?? []) as unknown as SeatingInfo[]

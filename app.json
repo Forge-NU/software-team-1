@@ -26,7 +26,8 @@
       "expo-router",
       "expo-font",
       "expo-splash-screen",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-localization"
     ]
   }
 }
