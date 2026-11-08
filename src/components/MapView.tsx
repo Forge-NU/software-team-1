@@ -1,8 +1,9 @@
 import { useRef } from 'react';
+import { StyleSheet, View, type DimensionValue, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { type Region, type UserLocationChangeEvent } from 'react-native-maps';
 import { isLocationGranted, useLocationPermission } from '@/hooks/useLocationPermission';
+import { colors } from '@/theme/colors';
 import type { Location } from '@/types/location';
-import { StyleProp, ViewStyle } from 'react-native';
 
 /** Shown until the user's location is known, or if they haven't granted location access */
 const DEFAULT_REGION: Region = {
@@ -20,18 +21,19 @@ const METERS_PER_DEGREE = 111_000;
 
 const BORDER_RADIUS = 24;
 
-interface MapViewProps {
+interface MapViewComponentProps {
     locations?: Location[];
-    width: number;
-    height: number;
-    /** Additional styles for the map view (border and shadow) */
+    /** Defaults to filling the parent's width */
+    width?: DimensionValue;
+    height: DimensionValue;
+    /** Additional styles for the map's container (e.g. border and shadow) */
     style?: StyleProp<ViewStyle>;
     interactive?: boolean;
     /** Handles pressing on a location */
     onLocationPress?: (l: Location) => void;
 }
 
-export default function MapViewComponent(props: MapViewProps) {
+export default function MapViewComponent(props: MapViewComponentProps) {
     const mapRef = useRef<MapView>(null);
     const { permission } = useLocationPermission();
     // Only center on the user once, so the map doesn't jump back while they're panning
@@ -58,15 +60,34 @@ export default function MapViewComponent(props: MapViewProps) {
     // TODO: Prompt for location permission if not granted and possible
     // TODO: © OpenStreetMap contributors
     
+    // Two wrappers: the outer one carries size, border and shadow, and the inner one clips the map to the rounded corners
+    // NOTE: They can't be combined, since clipping on iOS also hides the shadow, and Android map views ignore borderRadius on themselves
     return (
-        <MapView
-            ref={mapRef}
-            style={{ flex: 1, width: props.width, height: props.height, borderRadius: BORDER_RADIUS, ...props.style }}
-            initialRegion={DEFAULT_REGION}
-            // Only enable once granted: on iOS, showsUserLocation prompts for permission itself
-            showsUserLocation={isLocationGranted(permission)}
-            showsMyLocationButton={false}
-            onUserLocationChange={handleUserLocationChange}
-        />
+        <View style={[styles.container, { width: props.width ?? '100%', height: props.height }, props.style]}>
+            <View style={styles.clip}>
+                <MapView
+                    ref={mapRef}
+                    style={StyleSheet.absoluteFill}
+                    initialRegion={DEFAULT_REGION}
+                    // Only enable once granted: on iOS, showsUserLocation prompts for permission itself
+                    showsUserLocation={isLocationGranted(permission)}
+                    showsMyLocationButton={false}
+                    onUserLocationChange={handleUserLocationChange}
+                />
+            </View>
+        </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        borderRadius: BORDER_RADIUS,
+        // Android only draws elevation shadows on views with a background
+        backgroundColor: colors.surface,
+    },
+    clip: {
+        flex: 1,
+        borderRadius: BORDER_RADIUS,
+        overflow: 'hidden',
+    },
+});
