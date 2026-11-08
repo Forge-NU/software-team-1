@@ -235,3 +235,94 @@ export async function deletePost(postId: number): Promise<void> {
   const { error: storageError } = await supabase.storage.from(BUCKET).remove(paths)
   if (storageError) throw storageError
 }
+
+const FEED_PAGE_SIZE = 20
+const FEED_MAX_PAGE_SIZE = 50
+
+/** Where the next feed page starts: the last post you already have. */
+export interface FeedCursor {
+  createdAt: string
+  postId: number
+}
+
+export interface FeedPost {
+  post_id: number
+  location_id: number
+  location_name: string
+  user_id: string
+  author_name: string
+  crowd_level_id: number
+  crowd_level: string
+  noise_level_id: number | null
+  noise_level: string | null
+  caption: string | null
+  created_at: string
+  /** Signed URL of the post's first photo. Every feed post has one. */
+  photo_url: string
+}
+
+export interface FeedPage {
+  posts: FeedPost[]
+  /** Pass this back to get the next page. Null when there are no more posts. */
+  nextCursor: FeedCursor | null
+}
+
+export interface FeedOptions {
+  cursor?: FeedCursor | null
+  limit?: number
+  /** Only posts at spots the user has saved. Needs B-6's saved_spot table. */
+  savedOnly?: boolean
+}
+
+interface FeedRow {
+  post_id: number
+  location_id: number
+  location_name: string
+  user_id: string
+  author_name: string
+  crowd_level_id: number
+  crowd_level: string
+  noise_level_id: number | null
+  noise_level: string | null
+  caption: string | null
+  created_at: string
+  photo_path: string
+}
+
+/**
+ * Recent check-ins across campus, newest first, for the Feed tab.
+ * Call it again with `nextCursor` to load the next page.
+ */
+export async function getCampusFeed(options: FeedOptions = {}): Promise<FeedPage> {
+  const limit = Math.min(Math.max(options.limit ?? FEED_PAGE_SIZE, 1), FEED_MAX_PAGE_SIZE)
+
+  const { data, error } = await supabase.rpc('get_campus_feed', {
+    p_before_created_at: options.cursor?.createdAt ?? null,
+    p_before_post_id: options.cursor?.postId ?? null,
+    p_limit: limit,
+    p_saved_only: options.savedOnly ?? false,
+  })
+  if (error) throw error
+
+  const rows = (data ?? []) as FeedRow[]
+  const urls = await signedUrls(rows.map((row) => row.photo_path))
+  const posts = rows.map((row) => ({
+    post_id: row.post_id,
+    location_id: row.location_id,
+    location_name: row.location_name,
+    user_id: row.user_id,
+    author_name: row.author_name,
+    crowd_level_id: row.crowd_level_id,
+    crowd_level: row.crowd_level,
+    noise_level_id: row.noise_level_id,
+    noise_level: row.noise_level,
+    caption: row.caption,
+    created_at: row.created_at,
+    photo_url: urls.get(row.photo_path) ?? '',
+  }))
+
+  // A full page means there may be more; a short page means we've reached the end.
+  const last = rows[rows.length - 1]
+  const nextCursor = rows.length === limit && last ? { createdAt: last.created_at, postId: last.post_id } : null
+  return { posts, nextCursor }
+}
