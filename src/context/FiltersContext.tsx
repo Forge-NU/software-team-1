@@ -1,5 +1,6 @@
 import React, { createContext, ReactNode, useCallback, useContext, useMemo, useState } from 'react'
 import { emptyFilters, Filters } from '../screens/FiltersScreen'
+import { PRICE_RANGES, type PriceRangeId } from '../constants/lookups'
 
 export interface ActiveChip {
   key: string
@@ -20,7 +21,6 @@ interface FiltersContextValue {
 
 const FiltersContext = createContext<FiltersContextValue | undefined>(undefined)
 
-const PRICE_LABELS: Record<number, string> = { 0: 'Free', 1: '$', 2: '$$', 3: '$$$', 4: '$$$$' }
 
 function freshFilters(): Filters {
   return { ...emptyFilters, locationTypes: [], amenities: [], priceRangeIds: [] }
@@ -32,7 +32,7 @@ export function getActiveChips(filters: Filters): ActiveChip[] {
   for (const type of filters.locationTypes) chips.push({ key: `location-${type}`, label: type })
   for (const amenity of filters.amenities) chips.push({ key: `amenity-${amenity}`, label: amenity })
   for (const id of filters.priceRangeIds) {
-    chips.push({ key: `price-${id}`, label: PRICE_LABELS[id] ?? String(id) })
+    chips.push({ key: `price-${id}`, label: PRICE_RANGES[id as PriceRangeId] ?? String(id) })
   }
   if (filters.accessible) chips.push({ key: 'accessible', label: 'Accessible' })
   return chips
