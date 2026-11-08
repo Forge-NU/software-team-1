@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { StyleSheet, View, type DimensionValue, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { type Region, type UserLocationChangeEvent } from 'react-native-maps';
+import SpotMarker from '@/components/SpotMarker';
 import { isLocationGranted, useLocationPermission } from '@/hooks/useLocationPermission';
 import { colors } from '@/theme/colors';
 import type { Location } from '@/types/location';
@@ -73,7 +74,15 @@ export default function MapViewComponent(props: MapViewComponentProps) {
                     showsUserLocation={isLocationGranted(permission)}
                     showsMyLocationButton={false}
                     onUserLocationChange={handleUserLocationChange}
-                />
+                >
+                    {props.locations?.map((location) => (
+                        <SpotMarker
+                            key={location.location_id}
+                            location={location}
+                            onPress={props.onLocationPress}
+                        />
+                    ))}
+                </MapView>
             </View>
         </View>
     );
