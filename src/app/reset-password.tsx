@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -14,6 +14,10 @@ import { useRouter } from 'expo-router';
 
 import { updatePassword } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import {
+    canResetPassword,
+    clearPasswordRecovery,
+} from '@/lib/passwordRecovery';
 import { colors } from '@/theme';
 
 export default function ResetPasswordScreen() {
@@ -22,11 +26,53 @@ export default function ResetPasswordScreen() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [checkingAccess, setCheckingAccess] = useState(true);
+    const [recoveryAllowed, setRecoveryAllowed] = useState(false);
     const [message, setMessage] = useState('');
     const [isSuccess, setIsSuccess] = useState(false);
 
+    useEffect(() => {
+        let active = true;
+
+        const checkRecovery = async () => {
+            try {
+                // checks if user opened a valid reset link
+                const { data, error } = await supabase.auth.getUser();
+
+                if (active) {
+                    setRecoveryAllowed(
+                        !error &&
+                        canResetPassword(data.user?.id)
+                    );
+                }
+            } catch {
+                if (active) {
+                    setRecoveryAllowed(false);
+                }
+            } finally {
+                if (active) {
+                    setCheckingAccess(false);
+                }
+            }
+        };
+
+        void checkRecovery();
+
+        return () => {
+            active = false;
+        };
+    }, []);
+
     const handleUpdatePassword = async () => {
-        // checks if both password fields are filled out
+        // checks if reset access is allowed
+        if (!recoveryAllowed) {
+            setMessage(
+                'Please open your password reset link from your email.'
+            );
+            return;
+        }
+
+        // checks if both fields are filled out
         if (!password || !confirmPassword) {
             setMessage('Please fill out both fields.');
             return;
@@ -38,7 +84,7 @@ export default function ResetPasswordScreen() {
             return;
         }
 
-        // makes sure both passwords match
+        // makes sure the passwords match
         if (password !== confirmPassword) {
             setMessage('Passwords do not match.');
             return;
@@ -48,24 +94,33 @@ export default function ResetPasswordScreen() {
         setMessage('');
 
         try {
-            // makes sure the reset link created a valid session
-            const { data, error: sessionError } =
-                await supabase.auth.getSession();
+            // checks the current user before updating
+            const { data, error: userError } =
+                await supabase.auth.getUser();
 
-            if (sessionError || !data.session) {
+            if (
+                userError ||
+                !data.user ||
+                !canResetPassword(data.user.id)
+            ) {
+                setRecoveryAllowed(false);
                 setMessage(
-                    'Your reset link is invalid or expired. Please request a new one.'
+                    'Your reset session is invalid. Please request a new link.'
                 );
                 return;
             }
 
-            // updates the password with supabase
+            // updates the password through supabase
             const { error } = await updatePassword(password);
 
             if (error) {
                 setMessage(error.message);
                 return;
             }
+
+            // clears reset access after updating
+            clearPasswordRecovery();
+            setRecoveryAllowed(false);
 
             setIsSuccess(true);
             setMessage('Your password has been updated!');
@@ -90,7 +145,12 @@ export default function ResetPasswordScreen() {
                     Enter your new password below.
                 </Text>
 
-                {!isSuccess ? (
+                {checkingAccess ? (
+                    <ActivityIndicator
+                        size="large"
+                        color={colors.primary}
+                    />
+                ) : recoveryAllowed && !isSuccess ? (
                     <>
                         <Text style={styles.label}>
                             New Password
@@ -154,6 +214,12 @@ export default function ResetPasswordScreen() {
                     </Text>
                 ) : null}
 
+                {!checkingAccess && !recoveryAllowed && !isSuccess ? (
+                    <Text style={styles.error}>
+                        Please open your password reset link from your email.
+                    </Text>
+                ) : null}
+
                 {isSuccess ? (
                     <TouchableOpacity
                         style={styles.button}
@@ -163,7 +229,7 @@ export default function ResetPasswordScreen() {
                             Continue to Spotted
                         </Text>
                     </TouchableOpacity>
-                ) : (
+                ) : !checkingAccess ? (
                     <TouchableOpacity
                         style={styles.backButton}
                         onPress={() => router.replace('/sign-in')}
@@ -172,7 +238,7 @@ export default function ResetPasswordScreen() {
                             Back to Sign In
                         </Text>
                     </TouchableOpacity>
-                )}
+                ) : null}
             </View>
         </KeyboardAvoidingView>
     );
@@ -248,6 +314,8 @@ const styles = StyleSheet.create({
 
     error: {
         color: '#DC2626',
+        textAlign: 'center',
+        marginTop: 12,
     },
 
     success: {

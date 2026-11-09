@@ -11,6 +11,11 @@ import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 
 import { handleAuthLink } from '@/lib/authLinks';
+import { supabase } from '@/lib/supabase';
+import {
+    allowPasswordRecovery,
+    clearPasswordRecovery,
+} from '@/lib/passwordRecovery';
 
 export default function AuthCallbackScreen() {
     const router = useRouter();
@@ -46,6 +51,9 @@ export default function AuthCallbackScreen() {
             setLoading(true);
             setErrorMessage(null);
 
+            // clears any old reset access
+            clearPasswordRecovery();
+
             try {
                 // checks the link with supabase
                 const result = await handleAuthLink(url!);
@@ -57,10 +65,25 @@ export default function AuthCallbackScreen() {
                     return;
                 }
 
-                // sends user to reset password or home
                 if (result.recovery) {
+                    // checks which account the reset link belongs to
+                    const { data, error } = await supabase.auth.getUser();
+
+                    if (!active) return;
+
+                    if (error || !data.user) {
+                        setErrorMessage(
+                            'Could not verify the reset session.'
+                        );
+                        return;
+                    }
+
+                    // lets this user open the reset form
+                    allowPasswordRecovery(data.user.id);
+
                     router.replace('/reset-password');
                 } else {
+                    // sends confirmed users back to the app
                     router.replace('/');
                 }
             } catch {
@@ -92,6 +115,7 @@ export default function AuthCallbackScreen() {
                         size="large"
                         color="#3B82F6"
                     />
+
                     <Text style={styles.message}>
                         Verifying your email...
                     </Text>
