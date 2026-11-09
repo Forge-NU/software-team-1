@@ -7,9 +7,11 @@ supabase/
   config.toml          local Supabase settings (used by `supabase start`)
   deno.json            Deno settings for running the tests
   migrations/          database schema, applied in filename order
+  functions/           Edge Functions (Deno); secrets stay here / on the host — never in the Expo app
   scripts/             one-off scripts, e.g. importing places from OpenStreetMap
   tests/
     database/          schema tests against the real migrations
+    delete-account/    delete-account Edge Function handler tests
     osm/               OpenStreetMap importer tests
     lib/               app client (src/lib) tests
 ```
@@ -26,6 +28,7 @@ supabase/
 | `20261016150500_review_photos.sql` | Optional `review_photo` rows, the private `review-photos` bucket, and `attach_review_photos` |
 | `20261018120000_openstreetmap.sql` | `osm_type`/`osm_id` on `location`, and `upsert_osm_places(jsonb)`, used by the OpenStreetMap import script to save locations, addresses and hours in one transaction |
 | `20261018130000_drop_google_places.sql` | Drops `upsert_google_place`. `google_place_id` is kept for locations imported before the switch |
+| `20261101120000_area_amenities.sql` | The `phone_policy` lookup table, and optional `phone_policy_id`, `time_limit_minutes` and `wheelchair_accessible` on `area`. Null means unknown or not applicable |
 
 ### Why the filenames look like that
 
@@ -65,6 +68,23 @@ Crowdedness is the latest post's crowd level. The photo strip signs `post_photo.
 
 Reviews use `src/lib/reviews.ts` (`createReview`, `getReviewsForSeating`). A review never requires a photo; when photos are included they live in the `review-photos` bucket and are linked with `attach_review_photos`.
 
+## Account deletion (`delete-account`)
+
+App Store rules require in-app account deletion. The Expo app calls `deleteMyAccount()` in `src/lib/auth.ts`, which invokes the `delete-account` Edge Function with the user's JWT, then signs out.
+
+The function:
+
+1. Resolves the caller from the JWT (never from the request body)
+2. Removes Storage objects under `{userId}/` in the private `post-photos` and `review-photos` buckets
+3. Calls `auth.admin.deleteUser`, which cascades `public.users` and related rows (posts, votes, reviews, follows, …)
+
+`SUPABASE_SERVICE_ROLE_KEY` is required only as an Edge Function secret (injected automatically by `supabase functions serve` / the hosted project). Do not put it in `.env` for Expo or any `EXPO_PUBLIC_*` variable.
+
+```bash
+npx supabase functions serve delete-account   # local; CLI injects URL, anon, and service role
+npx supabase functions deploy delete-account  # hosted; service role is already a project secret
+```
+
 ## Importing places from OpenStreetMap
 
 `scripts/import_osm.ts` fetches libraries, cafes, coworking spaces and campus buildings around Boston from the [Overpass API](https://wiki.openstreetmap.org/wiki/Overpass_API) and saves them with `upsert_osm_places`. It replaced the Google Places edge function, since Google's terms don't allow keeping place details in our own database.
@@ -95,6 +115,7 @@ npm run test:backend
 | File | What it covers |
 | --- | --- |
 | `tests/database/schema_test.ts` | The real migrations running in an in-memory Postgres ([PGlite](https://pglite.dev)): constraints, cascade deletes, the ratings trigger, row level security for anon, student and admin, posts and the photo bucket, `upsert_osm_places`, and `nearby_locations` (radius, ordering, filters, cursor pagination, input validation) |
+| `tests/delete-account/handler_test.ts` | `delete-account` Edge Function: JWT-only identity, storage prefix cleanup in both photo buckets, auth user delete (including already-gone retries), and rejecting unauthenticated callers |
 | `tests/osm/overpass_test.ts` | Converting OSM tags (location type, address, opening hours) and the Overpass queries, retries and campus matching, with the server faked |
 | `tests/lib/places_test.ts` | `getNearbyLocations` in `src/lib/places.ts`, with PostgREST faked by running `nearby_locations` in the in-memory database: paging with `nextCursor`, filters, and pageSize/cursor validation |
 

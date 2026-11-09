@@ -15,7 +15,7 @@ Deno.test('lookup data is seeded', () =>
     assertEquals(await count('day'), 7)
     assertEquals(await count('price_range'), 5)
     for (const table of [
-      'location_type', 'campus', 'seat_type', 'capacity', 'outlet_level', 'crowd_level', 'noise_level',
+      'location_type', 'campus', 'seat_type', 'capacity', 'outlet_level', 'crowd_level', 'noise_level', 'phone_policy',
     ]) {
       assertEquals((await count(table)) > 0, true, `${table} is empty`)
     }
@@ -233,6 +233,67 @@ Deno.test('seating_area', async (t) => {
       assertEquals(await db.query(`select area_id, location_id from public.seating_area where seating_id = $1`, [seatingId]), [
         { area_id: null, location_id: locationId },
       ])
+    }))
+})
+
+Deno.test('area amenities', async (t) => {
+  const amenities = (db: Parameters<Parameters<typeof withDb>[0]>[0], areaId: number) =>
+    db.query(
+      `select phone_policy_id, time_limit_minutes, wheelchair_accessible from public.area where area_id = $1`,
+      [areaId],
+    )
+
+  await t.step('phone policies are seeded', () =>
+    withDb(async (db) => {
+      assertEquals(
+        await db.query(`select phone_policy_id, label from public.phone_policy order by phone_policy_id`),
+        [
+          { phone_policy_id: 0, label: 'No Phone Calls Allowed' },
+          { phone_policy_id: 1, label: 'Quiet Phone Calls Only' },
+          { phone_policy_id: 2, label: 'Phone Calls Allowed' },
+        ],
+      )
+    }))
+
+  await t.step('phone policy, time limit and accessibility are optional and default to null', () =>
+    withDb(async (db) => {
+      const { areaId } = await seed(db)
+      assertEquals(await amenities(db, areaId), [
+        { phone_policy_id: null, time_limit_minutes: null, wheelchair_accessible: null },
+      ])
+    }))
+
+  await t.step('they can be set', () =>
+    withDb(async (db) => {
+      const { areaId } = await seed(db)
+      await db.query(
+        `update public.area
+         set phone_policy_id = 1, time_limit_minutes = 120, wheelchair_accessible = false
+         where area_id = $1`,
+        [areaId],
+      )
+      assertEquals(await amenities(db, areaId), [
+        { phone_policy_id: 1, time_limit_minutes: 120, wheelchair_accessible: false },
+      ])
+    }))
+
+  await t.step('phone policy must be a known policy', () =>
+    withDb(async (db) => {
+      const { areaId } = await seed(db)
+      const set = (id: number) =>
+        db.query(`update public.area set phone_policy_id = $2 where area_id = $1`, [areaId, id])
+      await assertPgError(set(99), FOREIGN_KEY)
+      await set(0)
+    }))
+
+  await t.step('time limit must be positive', () =>
+    withDb(async (db) => {
+      const { areaId } = await seed(db)
+      const set = (minutes: number) =>
+        db.query(`update public.area set time_limit_minutes = $2 where area_id = $1`, [areaId, minutes])
+      await assertPgError(set(0), CHECK)
+      await assertPgError(set(-30), CHECK)
+      await set(30)
     }))
 })
 
