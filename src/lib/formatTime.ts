@@ -35,7 +35,8 @@ export function formatClock(time: string): string {
 export function formatHoursRange(hours: DayHours): string {
   if (
     hours.open_time.startsWith('00:00') &&
-    hours.close_time.startsWith('24:00')
+    (hours.close_time.startsWith('24:00') ||
+      hours.close_time.startsWith('23:59'))
   ) {
     return 'Open 24 hours';
   }

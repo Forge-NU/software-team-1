@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import TopBar from '../components/TopBar';
+import { formatTimeAgo } from '../lib/formatTime';
 import { getLocation } from '../lib/places';
 import { getRecentPhotos } from '../lib/posts';
 import type { RecentPhoto } from '../lib/posts';
@@ -20,35 +21,6 @@ import { colors, radius, spacing, typography } from '../theme';
 interface PhotoGalleryScreenProps {
   locationId: number;
   onBack: () => void;
-}
-
-function formatTime(dateString: string) {
-  const date = new Date(dateString);
-  const now = new Date();
-  const minutes = Math.max(
-    0,
-    Math.floor((now.getTime() - date.getTime()) / 60000)
-  );
-
-  if (date.toDateString() === now.toDateString()) {
-    if (minutes < 1) return 'Today, just now';
-    if (minutes < 60) return `Today, ${minutes} min ago`;
-
-    const hours = Math.floor(minutes / 60);
-    return `Today, ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-  }
-
-  if (
-    date.toDateString() ===
-    new Date(now.getTime() - 86400000).toDateString()
-  ) {
-    return 'Yesterday';
-  }
-
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 export default function PhotoGalleryScreen({
@@ -164,7 +136,7 @@ export default function PhotoGalleryScreen({
 
             <Text style={styles.photoInfo}>
               {currentPhoto.author_name || 'Anonymous'} ·{' '}
-              {formatTime(currentPhoto.created_at)}
+              {formatTimeAgo(currentPhoto.created_at)}
             </Text>
           </View>
 
