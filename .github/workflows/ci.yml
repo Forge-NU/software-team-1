@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: backend-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.8
+
+      - run: npm ci
+
+      - run: npm run test:backend
+
+  migrations-and-types:
+    name: migrations-and-types
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 3.0.0
+
+      - name: Apply migrations from scratch
+        run: |
+          supabase start
+          supabase db reset --yes
+
+      - name: Check generated database types
+        run: |
+          types_file=src/types/database.types.ts
+          if [ ! -f "$types_file" ]; then
+            echo "::error::Missing ${types_file}. Commit the output of: npx supabase gen types typescript --local"
+            exit 1
+          fi
+          supabase gen types typescript --local > "${RUNNER_TEMP}/database.types.ts"
+          diff -u "$types_file" "${RUNNER_TEMP}/database.types.ts"
+
+  app-typecheck:
+    name: app-typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx tsc --noEmit

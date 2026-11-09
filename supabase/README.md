@@ -101,3 +101,20 @@ npm run test:backend
 `tests/database/db.ts` stands in for the parts of Supabase the migrations rely on (`auth.users`, `auth.uid()`, the `anon` and `authenticated` roles, `storage`, and the `extensions` schema) and loads PGlite's PostGIS extension. Each test runs inside a transaction that is rolled back afterward, so tests don't affect each other. Use `seed(db)` for a starting admin, two students, and a location with an area and seat, and `db.as(userId)` to run a query as that user (`null` for signed out).
 
 `deno.json` maps `src/lib/supabase.ts` (which reads Expo env vars) to `tests/lib/supabase.ts`, a client pointed at a fake URL that tests answer by stubbing `fetch`.
+
+## CI
+
+Pull requests run these checks. The workflow does not use repository secrets and does not connect to the hosted project. Local Supabase on the runner uses the CLI's built-in demo keys.
+
+```bash
+npm run test:backend
+npx supabase start
+npx supabase db reset
+npx supabase gen types typescript --local > src/types/database.types.ts
+npx tsc --noEmit
+```
+
+- `npm run test:backend` runs the Deno tests above. They use an in-memory database, so this command does not need Docker.
+- `npx supabase start` followed by `npx supabase db reset` applies every file in `migrations/` to an empty database. A migration that does not apply cleanly, including one that conflicts with an earlier migration, fails the check. Lookup rows already live in migrations, and `config.toml` only warns when `seed.sql` is absent.
+- `npx supabase gen types typescript --local` must match the committed `src/types/database.types.ts`. The check fails when that file is missing or when a schema change is committed without regenerating it.
+- `npx tsc --noEmit` typechecks the app.
