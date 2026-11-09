@@ -57,6 +57,7 @@ function RootNavigator() {
       <Stack.Protected guard={isSignedIn} redirectTo="/sign-up">
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="spot/[id]" />
+        <Stack.Screen name="spot/photos/[id]" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="preferences" />
         <Stack.Screen name="filters" />
