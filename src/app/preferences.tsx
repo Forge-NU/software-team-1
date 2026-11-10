@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -6,7 +6,7 @@ import { Feather } from '@expo/vector-icons';
 import { FormMessage } from '@/components/FormMessage';
 import TopBar from '@/components/TopBar';
 import { Button, Screen, Text } from '@/components/ui';
-import { ATMOSPHERE_NOISE_LEVEL, updatePreferences, type Amenity } from '@/lib/profile';
+import { ATMOSPHERE_NOISE_LEVEL, getPreferences, updatePreferences, type Amenity } from '@/lib/profile';
 import { colors } from '@/theme';
 
 type Atmosphere = keyof typeof ATMOSPHERE_NOISE_LEVEL;
@@ -23,6 +23,12 @@ const AMENITY_OPTIONS: { value: Amenity; label: string }[] = [
   { value: 'food_drinks', label: 'Food and drinks nearby' },
 ];
 
+/** The atmosphere option for a saved noise level, or null if it isn't one of them */
+function atmosphereFor(noiseLevel: number | null): Atmosphere | null {
+  const match = ATMOSPHERE_OPTIONS.find((option) => ATMOSPHERE_NOISE_LEVEL[option.value] === noiseLevel);
+  return match?.value ?? null;
+}
+
 /** Figma "Preferences" frame (Hi-Fis). Opened once after sign up, and later from Settings. */
 export default function PreferencesScreen() {
   const router = useRouter();
@@ -30,6 +36,25 @@ export default function PreferencesScreen() {
   const [amenities, setAmenities] = useState<Amenity[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  // Pre-fill what's already saved, so opening this from Settings doesn't wipe it on Save
+  useEffect(() => {
+    let active = true;
+    getPreferences()
+      .then((saved) => {
+        if (!active) return;
+        setAtmosphere(atmosphereFor(saved.preferredNoise));
+        setAmenities(saved.preferredAmenities);
+      })
+      .catch(() => {}) // Nothing to show; start blank
+      .finally(() => {
+        if (active) setLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const done = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
@@ -110,7 +135,7 @@ export default function PreferencesScreen() {
 
       <View className="mt-auto gap-sm pt-md">
         <FormMessage message={error} tone="error" />
-        <Button label="Save & explore" onPress={save} loading={saving} />
+        <Button label="Save & explore" onPress={save} loading={saving} disabled={!loaded} />
         <Button label="Skip for now" variant="outline" onPress={done} />
         <Text variant="caption" color="textSecondary" className="text-center">
           Change these any time in your profile.
