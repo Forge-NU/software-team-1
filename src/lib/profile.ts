@@ -1,48 +1,14 @@
 import { z } from 'zod'
 import { supabase } from './supabase'
 import { mockDb } from './mocks/profileMocks'
-import { crowdLabels, noiseLabels } from './spot';
+import { crowdLabels, noiseLabels } from './spot'
+import { AMENITIES, AmenityId } from '../constants/lookups'
+import type { CheckIn, Preferences, Profile } from '../types/profile'
 
+// Set to true to run the Profile and Settings screens against ./mocks/profileMocks instead of Supabase.
 export const USE_MOCK_DATA = false
 
-// TODO(B-2): confirm the users table's id + name columns with whoever owns B-2.
-const USERS_TABLE = 'users'
-const USER_ID_COL = 'user_id'
-const NAME_COL = 'name'
-const SAVED_SPOTS_TABLE = 'saved_spot'
-
 export const MAX_NAME_LENGTH = 40
-
-export interface Profile {
-  userId: string
-  displayName: string | null
-  email: string | null
-  school: string | null
-  /** When the account was created (ISO string). */
-  memberSince: string | null
-  /** Null until a Saved table exists. */
-  savedCount: number | null
-}
-
-export interface CheckIn {
-  postId: string
-  locationId: number
-  locationName: string
-  createdAt: string
-  score: number
-  /** e.g. ['Nearly empty', 'Quiet', 'Outlets', '1 photo'] */
-  details: string[]
-}
-
-interface MyPostRow {
-  post_id: number
-  location_id: number
-  crowd_level_id: number
-  noise_level_id: number | null
-  created_at: string
-  location: { name: string } | null
-  post_photo: { count: number }[]
-}
 
 const SCHOOLS_BY_DOMAIN: Record<string, string> = {
   'northeastern.edu': 'Northeastern University',
@@ -51,6 +17,10 @@ const SCHOOLS_BY_DOMAIN: Record<string, string> = {
 function schoolFromEmail(email: string | null | undefined): string | null {
   const domain = email?.split('@')[1]?.toLowerCase()
   return domain ? SCHOOLS_BY_DOMAIN[domain] ?? null : null
+}
+
+function plural(n: number, word: string) {
+  return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
 // ---------- API ----------
@@ -71,25 +41,21 @@ export async function getMyProfile(): Promise<Profile | null> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data, error } = await supabase
-    .from(USERS_TABLE)
-    .select(`${USER_ID_COL}, ${NAME_COL}`)
-    .eq(USER_ID_COL, user.id)
-    .maybeSingle()
-  if (error) throw error
+  const [userResult, savedResult] = await Promise.all([
+    supabase.from('users').select('name').eq('user_id', user.id).maybeSingle(),
+    // RLS limits saved_spot to the caller's own rows
+    supabase.from('saved_spot').select('location_id', { count: 'exact', head: true }),
+  ])
+  if (userResult.error) throw userResult.error
+  if (savedResult.error) throw savedResult.error
 
-  const { count } = await supabase
-    .from(SAVED_SPOTS_TABLE)
-    .select('*', { count: 'exact', head: true })
-
-  const row = data as Record<string, unknown> | null
   return {
     userId: user.id,
-    displayName: (row?.[NAME_COL] as string | null) ?? null,
+    displayName: userResult.data?.name ?? null,
     email: user.email ?? null,
     school: schoolFromEmail(user.email),
     memberSince: user.created_at ?? null,
-    savedCount: count ?? 0,
+    savedCount: savedResult.count ?? 0,
   }
 }
 
@@ -104,42 +70,58 @@ export async function updateDisplayName(name: string): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('You are signed out. Sign in again to continue.')
 
-  const { error } = await supabase
-    .from(USERS_TABLE)
-    .update({ [NAME_COL]: trimmed })
-    .eq(USER_ID_COL, user.id)
+  const { error } = await supabase.from('users').update({ name: trimmed }).eq('user_id', user.id)
   if (error) throw error
   return trimmed
 }
 
-/** The user's own check-ins, newest first, with score and spot name. */
+interface MyPostRow {
+  post_id: number
+  location_id: number
+  crowd_level_id: number
+  noise_level_id: number | null
+  created_at: string
+  location: { name: string } | null
+  post_photo: { count: number }[]
+}
+
+/** The user's own posts, newest first, with vote score and spot name. */
 export async function getMyCheckIns(userId: string): Promise<CheckIn[]> {
   if (USE_MOCK_DATA) return [...mockDb.checkIns]
 
-  // TODO(B-3/B-4): confirm column names once the posts table and the
-  // posts_with_scores view exist, and build `details` from B-3's fields
-  // (crowding, noise, amenities, photo count).
   const { data, error } = await supabase
     .from('post')
-    .select('post_id, location_id, crowd_level_id, noise_level_id, created_at, location ( name ), post_photo ( count )')
+    .select(`
+      post_id, location_id, crowd_level_id, noise_level_id, created_at,
+      location!post_location_id_fkey ( name ),
+      post_photo ( count )
+    `)
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
   if (error) throw error
 
   const rows = (data ?? []) as unknown as MyPostRow[]
+  if (rows.length === 0) return []
+
+  const { data: votes, error: votesError } = await supabase
+    .from('post_vote_summary')
+    .select('post_id, vote_score')
+    .in('post_id', rows.map((row) => row.post_id))
+  if (votesError) throw votesError
+  const scores = new Map((votes ?? []).map((v) => [v.post_id as number, v.vote_score as number]))
 
   return rows.map((row) => {
-    const photos = row.post_photo?.[0]?.count ?? 0
+    const photos = row.post_photo[0]?.count ?? 0
     return {
       postId: String(row.post_id),
-      locationId: Number(row.location_id),
-      locationName: String(row.location?.name) ?? 'Unknown spot',
-      createdAt: String(row.created_at),
-      score: 0,
+      locationId: row.location_id,
+      locationName: row.location?.name ?? 'Unknown spot',
+      createdAt: row.created_at,
+      score: scores.get(row.post_id) ?? 0,
       details: [
         crowdLabels[row.crowd_level_id],
-        row.noise_level_id ? noiseLabels[row.noise_level_id] : null,
-        photos ? `${photos} photo${photos === 1 ? '' : 's'}` : null,
+        row.noise_level_id != null ? noiseLabels[row.noise_level_id] : undefined,
+        photos > 0 ? plural(photos, 'photo') : undefined,
       ].filter((d): d is string => Boolean(d)),
     }
   })
@@ -149,22 +131,15 @@ export async function getMyCheckIns(userId: string): Promise<CheckIn[]> {
 
 const PREFERENCES_TABLE = 'user_preferences'
 
-export const AMENITIES = ['outlets', 'wifi', 'whiteboards', 'food_drinks'] as const
-export type Amenity = (typeof AMENITIES)[number]
-
-/** Onboarding's "Preferred atmosphere", as noise_level ids (seed_lookups: 2 Quiet, 4 Loud). */
-export const ATMOSPHERE_NOISE_LEVEL = { quiet: 2, social: 4 } as const
+const AMENITY_IDS = Object.keys(AMENITIES) as [AmenityId, ...AmenityId[]]
 
 const PreferencesSchema = z.object({
-  /** A noise_level id, or null for no preference. */
   preferredNoise: z.number().int().min(1).max(5).nullable(),
-  preferredAmenities: z.array(z.enum(AMENITIES)),
+  preferredAmenities: z.array(z.enum(AMENITY_IDS)),
   notifySavedUpdates: z.boolean(),
-})
+}) satisfies z.ZodType<Preferences>
 
-export type Preferences = z.infer<typeof PreferencesSchema>
-
-const NO_PREFERENCES: Preferences = { preferredNoise: null, preferredAmenities: [], notifySavedUpdates: false }
+export const NO_PREFERENCES: Preferences = { preferredNoise: null, preferredAmenities: [], notifySavedUpdates: false }
 
 let mockPreferences: Preferences = { ...NO_PREFERENCES }
 
@@ -178,11 +153,18 @@ function fromRow(row: PreferencesRow): Preferences {
   return PreferencesSchema.parse({
     preferredNoise: row.preferred_noise,
     // Drop values this app version doesn't know, so a new amenity added later can't break reads
-    preferredAmenities: (row.preferred_amenities ?? []).filter((a): a is Amenity =>
-      (AMENITIES as readonly string[]).includes(a),
-    ),
+    preferredAmenities: (row.preferred_amenities ?? []).filter((a): a is AmenityId => Object.hasOwn(AMENITIES, a)),
     notifySavedUpdates: row.notify_saved_updates,
   })
+}
+
+/** A short summary like "Quiet · Outlets · Wi-Fi", or null when nothing is set. */
+export function summarizePreferences(prefs: Preferences): string | null {
+  const parts = [
+    prefs.preferredNoise != null ? noiseLabels[prefs.preferredNoise] : undefined,
+    ...prefs.preferredAmenities.map((a) => AMENITIES[a]),
+  ].filter((p): p is string => Boolean(p))
+  return parts.length > 0 ? parts.join(' · ') : null
 }
 
 /** The signed-in user's preferences. A new user has none, which is not an error. */

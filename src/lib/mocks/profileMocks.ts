@@ -1,7 +1,8 @@
-import type { CheckIn, Profile } from '../profile'
+import type { CheckIn, Profile } from '../../types/profile'
  
 // Mock data for the Profile screen, used while USE_MOCK_DATA is true in
-// src/lib/profile.ts. Delete this file once B-2 and B-3 are live.
+// src/lib/profile.ts. The mock check-in flow (USE_MOCK_CHECK_INS) also writes here, so
+// delete this file once that flow is live too
  
 function yesterdayAt(h: number, m: number) {
   const d = new Date()

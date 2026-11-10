@@ -1,6 +1,7 @@
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { getMyProfile, Profile, updateDisplayName } from '../lib/profile'
+import { getMyProfile, updateDisplayName } from '../lib/profile'
+import type { Profile } from '../types/profile'
 
 interface ProfileContextValue {
   profile: Profile | null
@@ -20,8 +21,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // `loading` is only true until a profile is first known, so refreshing an
+  // already-loaded profile (e.g. when Profile regains focus) doesn't blank the screen
   const refresh = useCallback(async () => {
-    setLoading(true)
     try {
       setProfile(await getMyProfile())
     } catch (e) {
@@ -35,7 +37,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     refresh()
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') setProfile(null)
-      if (event === 'SIGNED_IN') refresh()
+      if (event === 'SIGNED_IN') {
+        setLoading(true)
+        refresh()
+      }
     })
     return () => sub.subscription.unsubscribe()
   }, [refresh])

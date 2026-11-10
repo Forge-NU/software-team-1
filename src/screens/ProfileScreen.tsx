@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -10,7 +10,9 @@ import {
   View,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
-import { CheckIn, getMyCheckIns, MAX_NAME_LENGTH, signOut } from '../lib/profile'
+import { useFocusEffect } from 'expo-router'
+import { getMyCheckIns, MAX_NAME_LENGTH, signOut } from '../lib/profile'
+import type { CheckIn } from '../types/profile'
 import { useProfile } from '../context/ProfileContext'
 import TopBar from '../components/TopBar'
 import { colors, layout, radius, spacing, typography } from '../theme'
@@ -49,7 +51,7 @@ export default function ProfileScreen({
   onFindSpot,
   onSignedOut,
 }: ProfileScreenProps) {
-  const { profile, loading: profileLoading, setDisplayName } = useProfile()
+  const { profile, loading: profileLoading, refresh: refreshProfile, setDisplayName } = useProfile()
   const [checkIns, setCheckIns] = useState<CheckIn[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -72,10 +74,13 @@ export default function ProfileScreen({
     }
   }, [profile?.userId])
 
-  // TODO(F-1): once navigation exists, also reload when this tab regains focus.
-  useEffect(() => {
-    load()
-  }, [load])
+  // Reload whenever the tab regains focus
+  useFocusEffect(
+    useCallback(() => {
+      load()
+      refreshProfile()
+    }, [load, refreshProfile]),
+  )
 
   const startEditing = () => {
     setDraftName(profile?.displayName ?? '')
