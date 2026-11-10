@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import { supabase } from './supabase'
 import { mockDb } from './mocks/profileMocks'
+import { crowdLabels, noiseLabels } from './spot';
 
-// Flip to false once B-2 (users/auth) and B-3 (posts) are merged.
-export const USE_MOCK_DATA = true
+export const USE_MOCK_DATA = false
 
 // TODO(B-2): confirm the users table's id + name columns with whoever owns B-2.
 const USERS_TABLE = 'users'
@@ -31,6 +31,16 @@ export interface CheckIn {
   score: number
   /** e.g. ['Nearly empty', 'Quiet', 'Outlets', '1 photo'] */
   details: string[]
+}
+
+interface MyPostRow {
+  post_id: number
+  location_id: number
+  crowd_level_id: number
+  noise_level_id: number | null
+  created_at: string
+  location: { name: string } | null
+  post_photo: { count: number }[]
 }
 
 const SCHOOLS_BY_DOMAIN: Record<string, string> = {
@@ -105,20 +115,29 @@ export async function getMyCheckIns(userId: string): Promise<CheckIn[]> {
   // posts_with_scores view exist, and build `details` from B-3's fields
   // (crowding, noise, amenities, photo count).
   const { data, error } = await supabase
-    .from('posts_with_scores')
-    .select('post_id, location_id, created_at, score, location ( name )')
+    .from('post')
+    .select('post_id, location_id, crowd_level_id, noise_level_id, created_at, location ( name ), post_photo ( count )')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
   if (error) throw error
 
-  return (data ?? []).map((row: any) => ({
-    postId: String(row.post_id),
-    locationId: row.location_id,
-    locationName: row.location?.name ?? 'Unknown spot',
-    createdAt: row.created_at,
-    score: row.score ?? 0,
-    details: [],
-  }))
+  const rows = (data ?? []) as unknown as MyPostRow[]
+
+  return rows.map((row) => {
+    const photos = row.post_photo?.[0]?.count ?? 0
+    return {
+      postId: String(row.post_id),
+      locationId: Number(row.location_id),
+      locationName: String(row.location?.name) ?? 'Unknown spot',
+      createdAt: String(row.created_at),
+      score: 0,
+      details: [
+        crowdLabels[row.crowd_level_id],
+        row.noise_level_id ? noiseLabels[row.noise_level_id] : null,
+        photos ? `${photos} photo${photos === 1 ? '' : 's'}` : null,
+      ].filter((d): d is string => Boolean(d)),
+    }
+  })
 }
 
 // ---------- Study preferences (B-7) ----------
