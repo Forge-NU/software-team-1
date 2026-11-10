@@ -96,7 +96,7 @@ interface RecentPhotoRow {
 
 const POST_SELECT = `
   post_id, user_id, location_id, seating_id, crowd_level_id, noise_level_id, wifi_mbps, caption, created_at,
-  users ( name ),
+  users!post_user_id_fkey ( name ),
   post_photo ( photo_id, storage_path, created_at )
 `
 
@@ -202,7 +202,7 @@ export async function getPostsForLocation(locationId: number, options: PostListO
 export async function getRecentPhotos(locationId: number, limit = RECENT_PHOTO_LIMIT): Promise<RecentPhoto[]> {
   const { data, error } = await supabase
     .from('post_photo')
-    .select('photo_id, post_id, storage_path, created_at, post!inner(location_id, caption, users ( name ))')
+    .select('photo_id, post_id, storage_path, created_at, post!inner(location_id, caption, users!post_user_id_fkey ( name ))')
     .eq('post.location_id', locationId)
     .order('created_at', { ascending: false })
     .limit(limit)
