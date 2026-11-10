@@ -3,27 +3,25 @@ import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 
+import { FormMessage } from '@/components/FormMessage';
 import TopBar from '@/components/TopBar';
 import { Button, Screen, Text } from '@/components/ui';
+import { ATMOSPHERE_NOISE_LEVEL, updatePreferences, type Amenity } from '@/lib/profile';
 import { colors } from '@/theme';
 
-type Atmosphere = 'quiet' | 'social';
-type Amenity = 'outlets' | 'wifi' | 'whiteboards' | 'food_drinks';
+type Atmosphere = keyof typeof ATMOSPHERE_NOISE_LEVEL;
 
-const ATMOSPHERES: { value: Atmosphere; label: string }[] = [
+const ATMOSPHERE_OPTIONS: { value: Atmosphere; label: string }[] = [
   { value: 'quiet', label: 'Quiet — focused solo study' },
   { value: 'social', label: 'Social — room to collaborate' },
 ];
 
-const AMENITIES: { value: Amenity; label: string }[] = [
+const AMENITY_OPTIONS: { value: Amenity; label: string }[] = [
   { value: 'outlets', label: 'Outlets' },
   { value: 'wifi', label: 'Wi-Fi' },
   { value: 'whiteboards', label: 'Whiteboards' },
   { value: 'food_drinks', label: 'Food and drinks nearby' },
 ];
-
-/** noise_level ids from seed_lookups: Quiet is 2, Loud is 4 */
-const NOISE_LEVEL: Record<Atmosphere, number> = { quiet: 2, social: 4 };
 
 /** Figma "Preferences" frame (Hi-Fis). Opened once after sign up, and later from Settings. */
 export default function PreferencesScreen() {
@@ -31,6 +29,7 @@ export default function PreferencesScreen() {
   const [atmosphere, setAtmosphere] = useState<Atmosphere | null>(null);
   const [amenities, setAmenities] = useState<Amenity[]>([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const done = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
@@ -39,19 +38,38 @@ export default function PreferencesScreen() {
 
   const save = async () => {
     setSaving(true);
-    const preferences = {
-      preferredNoise: atmosphere ? NOISE_LEVEL[atmosphere] : null,
-      preferredAmenities: amenities,
-    };
-    // TODO(B-7, #64): await updatePreferences({ ...preferences, notifySavedUpdates }) once it merges
-    void preferences;
-    setSaving(false);
-    done();
+    setError(null);
+    try {
+      // Leaves the notification setting alone; that lives in Settings
+      await updatePreferences({
+        preferredNoise: atmosphere ? ATMOSPHERE_NOISE_LEVEL[atmosphere] : null,
+        preferredAmenities: amenities,
+      });
+      done();
+    } catch {
+      setError('Your preferences weren’t saved. Try again, or skip for now.');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const skip = (
+    <Pressable
+      onPress={done}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Skip"
+      className="rounded-pill bg-primaryLight px-sm py-xs active:opacity-80"
+    >
+      <Text variant="label" color="textOnPrimaryLight">
+        Skip
+      </Text>
+    </Pressable>
+  );
 
   return (
     <Screen
-      header={<TopBar title="Study preferences" action={{ label: 'Skip', onPress: done }} />}
+      header={<TopBar title="Study preferences" right={skip} />}
       scroll
       padBottom
       contentClassName="gap-md pb-xl"
@@ -66,7 +84,7 @@ export default function PreferencesScreen() {
       </View>
 
       <Section title="Preferred atmosphere">
-        {ATMOSPHERES.map((option) => (
+        {ATMOSPHERE_OPTIONS.map((option) => (
           <Option
             key={option.value}
             label={option.label}
@@ -79,7 +97,7 @@ export default function PreferencesScreen() {
       </Section>
 
       <Section title="Amenities that matter">
-        {AMENITIES.map((option) => (
+        {AMENITY_OPTIONS.map((option) => (
           <Option
             key={option.value}
             label={option.label}
@@ -91,6 +109,7 @@ export default function PreferencesScreen() {
       </Section>
 
       <View className="mt-auto gap-sm pt-md">
+        <FormMessage message={error} tone="error" />
         <Button label="Save & explore" onPress={save} loading={saving} />
         <Button label="Skip for now" variant="outline" onPress={done} />
         <Text variant="caption" color="textSecondary" className="text-center">

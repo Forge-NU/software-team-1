@@ -13,6 +13,7 @@ import {
 } from '@expo-google-fonts/afacad';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { FiltersProvider } from '@/context/FiltersContext';
 import { ProfileProvider } from '@/context/ProfileContext';
 import { useWelcomeSeen } from '@/lib/onboarding';
 import { colors } from '@/theme';
@@ -24,8 +25,10 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <ProfileProvider>
-        <RootNavigator />
-        <StatusBar style="dark" />
+        <FiltersProvider>
+          <RootNavigator />
+          <StatusBar style="dark" />
+        </FiltersProvider>
       </ProfileProvider>
     </AuthProvider>
   );
@@ -57,8 +60,10 @@ function RootNavigator() {
       <Stack.Protected guard={isSignedIn} redirectTo={welcomeSeen ? '/sign-up' : '/welcome'}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="spot/[id]" />
+        <Stack.Screen name="spot/photos/[id]" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="preferences" />
+        <Stack.Screen name="filters" />
       </Stack.Protected>
       <Stack.Protected guard={!isSignedIn} redirectTo="/">
         <Stack.Screen name="(auth)" />
