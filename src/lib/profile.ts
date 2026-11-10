@@ -9,6 +9,7 @@ export const USE_MOCK_DATA = false
 const USERS_TABLE = 'users'
 const USER_ID_COL = 'user_id'
 const NAME_COL = 'name'
+const SAVED_SPOTS_TABLE = 'saved_spot'
 
 export const MAX_NAME_LENGTH = 40
 
@@ -77,6 +78,10 @@ export async function getMyProfile(): Promise<Profile | null> {
     .maybeSingle()
   if (error) throw error
 
+  const { count } = await supabase
+    .from(SAVED_SPOTS_TABLE)
+    .select('*', { count: 'exact', head: true })
+
   const row = data as Record<string, unknown> | null
   return {
     userId: user.id,
@@ -84,7 +89,7 @@ export async function getMyProfile(): Promise<Profile | null> {
     email: user.email ?? null,
     school: schoolFromEmail(user.email),
     memberSince: user.created_at ?? null,
-    savedCount: null, // TODO: wire up when the Saved feature has a table
+    savedCount: count ?? 0,
   }
 }
 
