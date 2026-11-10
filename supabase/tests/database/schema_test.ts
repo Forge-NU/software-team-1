@@ -545,6 +545,63 @@ Deno.test('post', async (t) => {
       assertEquals(await db.query('select * from public.post'), [])
       assertEquals(await db.query('select * from public.post_photo'), [])
     }))
+
+  await t.step('rejects a second post at the same spot inside the 10-minute window', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      const first = photoPath(STUDENT, 'first.jpg')
+      const second = photoPath(STUDENT, 'second.jpg')
+      await putPhoto(db, first)
+      await putPhoto(db, second)
+
+      const [{ post_id }] = await createPost(db, STUDENT, locationId, [first])
+      try {
+        await createPost(db, STUDENT, locationId, [second])
+        throw new Error('Expected Postgres error 23514, but the query succeeded')
+      } catch (err) {
+        assertEquals((err as { code?: string }).code, CHECK)
+        assertEquals(
+          (err as Error).message.includes('once every 10 minutes'),
+          true,
+          (err as Error).message,
+        )
+      }
+
+      await db.query(`update public.post set created_at = now() - interval '11 minutes' where post_id = $1`, [
+        post_id,
+      ])
+      await createPost(db, STUDENT, locationId, [second])
+      assertEquals(await postCount(db), [{ n: 2 }])
+    }))
+
+  await t.step('rejects an 11th post within an hour', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      for (let i = 0; i < 10; i++) {
+        const path = photoPath(STUDENT, `hourly-${i}.jpg`)
+        await putPhoto(db, path)
+        const [{ post_id }] = await createPost(db, STUDENT, locationId, [path])
+        await db.query(`update public.post set created_at = now() - interval '11 minutes' where post_id = $1`, [
+          post_id,
+        ])
+      }
+      assertEquals(await postCount(db), [{ n: 10 }])
+
+      const over = photoPath(STUDENT, 'hourly-over.jpg')
+      await putPhoto(db, over)
+      try {
+        await createPost(db, STUDENT, locationId, [over])
+        throw new Error('Expected Postgres error 23514, but the query succeeded')
+      } catch (err) {
+        assertEquals((err as { code?: string }).code, CHECK)
+        assertEquals(
+          (err as Error).message.includes('Hourly post limit'),
+          true,
+          (err as Error).message,
+        )
+      }
+      assertEquals(await postCount(db), [{ n: 10 }])
+    }))
 })
 
 Deno.test('review_photo', async (t) => {
@@ -625,7 +682,7 @@ Deno.test('review_photo', async (t) => {
 })
 
 Deno.test('flag', async (t) => {
-  await t.step('must target something, and at most one of review or photo', () =>
+  await t.step('must target exactly one of review, photo, user, or post', () =>
     withDb(async (db) => {
       const { seatingId, locationId } = await seed(db)
       const [{ review_id }] = await db.as(OTHER_STUDENT).query<{ review_id: number }>(
@@ -643,16 +700,43 @@ Deno.test('flag', async (t) => {
         `select photo_id from public.post_photo where post_id = $1`,
         [post_id],
       )
-      const flag = (review: number | null, photo: number | null, user: string | null) =>
+      const flag = (
+        review: number | null,
+        photo: number | null,
+        user: string | null,
+        post: number | null = null,
+      ) =>
         db.as(STUDENT).query(
-          `insert into public.flag (review_id, photo_id, reported_user_id, reason) values ($1, $2, $3, 'spam')`,
-          [review, photo, user],
+          `insert into public.flag (review_id, photo_id, reported_user_id, post_id, reason)
+           values ($1, $2, $3, $4, 'spam')`,
+          [review, photo, user, post],
         )
-      await assertPgError(flag(null, null, null), CHECK)
-      await assertPgError(flag(review_id, photo_id, null), CHECK)
-      await flag(review_id, null, OTHER_STUDENT)
-      await flag(null, photo_id, null)
-      await flag(null, null, OTHER_STUDENT)
+      await assertPgError(flag(null, null, null, null), CHECK)
+      await assertPgError(flag(review_id, photo_id, null, null), CHECK)
+      await assertPgError(flag(review_id, null, OTHER_STUDENT, null), CHECK)
+      await assertPgError(flag(null, null, OTHER_STUDENT, post_id), CHECK)
+      await flag(review_id, null, null, null)
+      await flag(null, photo_id, null, null)
+      await flag(null, null, OTHER_STUDENT, null)
+      await flag(null, null, null, post_id)
+    }))
+
+  await t.step('one report per user per target', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      await db.query(`insert into storage.objects (bucket_id, name) values ('post-photos', $1)`, [
+        `${OTHER_STUDENT}/unique-flag.jpg`,
+      ])
+      const [{ post_id }] = await db.as(OTHER_STUDENT).query<{ post_id: number }>(
+        `select public.create_post($1, null::bigint, 3::smallint, null::smallint, null::real, null::text, $2) as post_id`,
+        [locationId, [`${OTHER_STUDENT}/unique-flag.jpg`]],
+      )
+      await db.as(STUDENT).query(`insert into public.flag (post_id, reason) values ($1, 'spam')`, [post_id])
+      await assertPgError(
+        db.as(STUDENT).query(`insert into public.flag (post_id, reason) values ($1, 'again')`, [post_id]),
+        UNIQUE,
+      )
+      await db.as(ADMIN).query(`insert into public.flag (post_id, reason) values ($1, 'also spam')`, [post_id])
     }))
 
   await t.step('status is restricted, and reporters can only submit pending flags', () =>
@@ -698,6 +782,41 @@ Deno.test('flag', async (t) => {
         ]),
         [{ status: 'resolved' }],
       )
+    }))
+
+  await t.step('open_flags lists pending flags with report_count; only admins see others', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      await db.query(`insert into storage.objects (bucket_id, name) values ('post-photos', $1)`, [
+        `${OTHER_STUDENT}/open-flag.jpg`,
+      ])
+      const [{ post_id }] = await db.as(OTHER_STUDENT).query<{ post_id: number }>(
+        `select public.create_post($1, null::bigint, 3::smallint, null::smallint, null::real, null::text, $2) as post_id`,
+        [locationId, [`${OTHER_STUDENT}/open-flag.jpg`]],
+      )
+      await db.as(STUDENT).query(`insert into public.flag (post_id, reason) values ($1, 'spam')`, [post_id])
+      await db.as(ADMIN).query(`insert into public.flag (post_id, reason) values ($1, 'also')`, [post_id])
+
+      assertEquals(await db.as(OTHER_STUDENT).query('select * from public.open_flags'), [])
+      // security_invoker: reporters only see their own row; report_count is RLS-scoped too.
+      assertEquals(
+        await db.as(STUDENT).query<{ post_id: number; report_count: number }>(
+          `select post_id, report_count from public.open_flags order by flag_id`,
+        ),
+        [{ post_id, report_count: 1 }],
+      )
+      assertEquals(
+        (await db.as(ADMIN).query<{ post_id: number; report_count: number }>(
+          `select post_id, report_count from public.open_flags order by flag_id`,
+        )),
+        [
+          { post_id, report_count: 2 },
+          { post_id, report_count: 2 },
+        ],
+      )
+
+      await db.as(ADMIN).query(`update public.flag set status = 'dismissed'`)
+      assertEquals(await db.as(ADMIN).query('select * from public.open_flags'), [])
     }))
 
   await t.step('deleting a reported user removes flags about them', () =>
