@@ -236,8 +236,9 @@ export async function deletePost(postId: number): Promise<void> {
   if (storageError) throw storageError
 }
 
+// Must match the limits checked in get_campus_feed.
 const FEED_PAGE_SIZE = 20
-const FEED_MAX_PAGE_SIZE = 50
+const FEED_MAX_PAGE_SIZE = 100
 
 /** Where the next feed page starts: the last post you already have. */
 export interface FeedCursor {
@@ -269,6 +270,7 @@ export interface FeedPage {
 
 export interface FeedOptions {
   cursor?: FeedCursor | null
+  /** Posts per page, 1 to 100. Defaults to 20. */
   limit?: number
   /** Only posts at spots the user has saved. Needs B-6's saved_spot table. */
   savedOnly?: boolean
@@ -292,13 +294,22 @@ interface FeedRow {
 /**
  * Recent check-ins across campus, newest first, for the Feed tab.
  * Call it again with `nextCursor` to load the next page.
+ * Throws on an invalid limit or cursor without calling the database.
  */
 export async function getCampusFeed(options: FeedOptions = {}): Promise<FeedPage> {
-  const limit = Math.min(Math.max(options.limit ?? FEED_PAGE_SIZE, 1), FEED_MAX_PAGE_SIZE)
+  const limit = options.limit ?? FEED_PAGE_SIZE
+  if (!Number.isInteger(limit) || limit < 1 || limit > FEED_MAX_PAGE_SIZE) {
+    throw new Error(`Invalid limit: ${limit}. Must be between 1 and ${FEED_MAX_PAGE_SIZE}.`)
+  }
+
+  const cursor = options.cursor ?? null
+  if (cursor && (!cursor.createdAt || !Number.isInteger(cursor.postId))) {
+    throw new Error('Invalid cursor: createdAt and postId must be set together.')
+  }
 
   const { data, error } = await supabase.rpc('get_campus_feed', {
-    p_before_created_at: options.cursor?.createdAt ?? null,
-    p_before_post_id: options.cursor?.postId ?? null,
+    p_before_created_at: cursor?.createdAt ?? null,
+    p_before_post_id: cursor?.postId ?? null,
     p_limit: limit,
     p_saved_only: options.savedOnly ?? false,
   })

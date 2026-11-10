@@ -2,6 +2,7 @@ import { assert, assertEquals } from 'jsr:@std/assert@1'
 import { assertPgError, type Db, OTHER_STUDENT, seed, STUDENT, withDb } from '../database/db.ts'
 
 const INSUFFICIENT_PRIVILEGE = '42501' // missing grant or RLS violation
+const INVALID_INPUT = 'P0001' // raise exception in get_campus_feed
 
 interface FeedRow {
   post_id: number
@@ -195,5 +196,26 @@ Deno.test('get_campus_feed', async (t) => {
       )
       const text = plan.map((row) => Object.values(row)[0]).join('\n')
       assert(text.includes('post_created_at_post_id_idx'), text)
+    }))
+
+  await t.step('rejects a cursor with only one part set', () =>
+    withDb(async (db) => {
+      await seed(db)
+      const call = (createdAt: string | null, postId: number | null) =>
+        db.as(STUDENT).query('select * from public.get_campus_feed($1, $2, $3, $4)', [createdAt, postId, 20, false])
+      await assertPgError(call('2026-11-08T12:00:00Z', null), INVALID_INPUT)
+      await assertPgError(call(null, 5), INVALID_INPUT)
+    }))
+
+  await t.step('rejects a missing or out-of-range limit, and allows 1 to 100', () =>
+    withDb(async (db) => {
+      await seed(db)
+      const call = (limit: number | null) =>
+        db.as(STUDENT).query('select * from public.get_campus_feed(null, null, $1, false)', [limit])
+      await assertPgError(call(0), INVALID_INPUT)
+      await assertPgError(call(101), INVALID_INPUT)
+      await assertPgError(call(null), INVALID_INPUT)
+      assertEquals(await call(1), [])
+      assertEquals(await call(100), [])
     }))
 })
