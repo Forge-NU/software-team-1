@@ -5,9 +5,8 @@ import { useFocusEffect } from 'expo-router'
 import { useProfile } from '../context/ProfileContext'
 import TopBar from '../components/TopBar'
 import { colors, layout, radius, spacing, typography } from '../theme'
-import { getPreferences, NO_PREFERENCES, summarizePreferences, updatePreferences } from '../lib/profile'
+import { summarizePreferences } from '../lib/profile'
 import { getLocationPermission, LocationPermission, openAppSettings } from '../lib/locationPermisson'
-import type { Preferences } from '../types/profile'
 
 export interface SettingsScreenProps {
   onBack?: () => void
@@ -15,6 +14,9 @@ export interface SettingsScreenProps {
 }
 
 type SaveState = 'idle' | 'saving' | 'error'
+
+// Device state, not account data, so it can outlive the screen (and a sign out) to avoid a flash on return
+let lastLocationPermission: LocationPermission | null = null
 
 const LOCATION_SUBTITLES: Record<LocationPermission, string> = {
   precise: 'While using the app · Manage in device settings',
@@ -36,27 +38,28 @@ function Row({ title, subtitle, onPress }: { title: string; subtitle: string; on
 }
 
 export default function SettingsScreen({ onBack, onOpenPreferences }: SettingsScreenProps) {
-  const { profile } = useProfile()
-  const [preferences, setPreferences] = useState<Preferences>(NO_PREFERENCES)
-  const [prefsLoaded, setPrefsLoaded] = useState(false)
+  // Preferences live in ProfileContext so the last loaded values show right away on return
+  const { profile, preferences, refreshPreferences, savePreferences } = useProfile()
+  const prefsLoaded = preferences !== null
   const [prefsError, setPrefsError] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>('idle')
-  const [locationPermission, setLocationPermission] = useState<LocationPermission | null>(null)
+  const [locationPermission, setLocationPermission] = useState<LocationPermission | null>(lastLocationPermission)
 
+  // Refreshes in the background; whatever is already shown stays until the new values arrive
   const loadPreferences = useCallback(async () => {
     try {
-      setPreferences(await getPreferences())
-      setPrefsLoaded(true)
+      await refreshPreferences()
       setPrefsError(false)
     } catch (err) {
       console.error('Failed to load preferences', err)
       setPrefsError(true)
     }
-  }, [])
+  }, [refreshPreferences])
 
   const loadLocationPermission = useCallback(async () => {
     try {
-      setLocationPermission(await getLocationPermission())
+      lastLocationPermission = await getLocationPermission()
+      setLocationPermission(lastLocationPermission)
     } catch (err) {
       console.error('Failed to read location permission', err)
     }
@@ -78,21 +81,19 @@ export default function SettingsScreen({ onBack, onOpenPreferences }: SettingsSc
     return () => sub.remove()
   }, [loadLocationPermission])
 
+  // savePreferences flips the switch right away and flips it back if the save fails
   const toggleSavedSpotAlerts = async (value: boolean) => {
-    const previous = preferences
-    setPreferences({ ...preferences, notifySavedUpdates: value })
     setSaveState('saving')
     try {
-      setPreferences(await updatePreferences({ notifySavedUpdates: value }))
+      await savePreferences({ notifySavedUpdates: value })
       setSaveState('idle')
     } catch (err) {
       console.error('Failed to save notification setting', err)
-      setPreferences(previous)
       setSaveState('error')
     }
   }
 
-  const alertsOn = preferences.notifySavedUpdates
+  const alertsOn = preferences?.notifySavedUpdates ?? false
   const onOff = alertsOn ? 'On' : 'Off'
   const statusTitle = !prefsLoaded
     ? prefsError
@@ -111,7 +112,7 @@ export default function SettingsScreen({ onBack, onOpenPreferences }: SettingsSc
       ? "You'll get an alert when a saved spot gets a new report."
       : 'Saved-spot alerts are off. You can still check current reports in Saved.'
 
-  const preferencesSubtitle = prefsLoaded
+  const preferencesSubtitle = preferences
     ? summarizePreferences(preferences) ?? 'Not set'
     : prefsError
       ? "Couldn't load"
