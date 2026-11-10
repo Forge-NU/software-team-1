@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from 'react';
+import { passwordSchema } from '@/lib/validation/auth';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -78,9 +79,11 @@ export default function ResetPasswordScreen() {
             return;
         }
 
-        // checks password length
-        if (password.length < 8) {
-            setMessage('Password must be at least 8 characters.');
+        // uses the same password rules as sign up
+        const passwordResult = passwordSchema.safeParse(password);
+
+        if (!passwordResult.success) {
+            setMessage(passwordResult.error.issues[0].message);
             return;
         }
 
