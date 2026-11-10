@@ -1,21 +1,21 @@
 import { StyleSheet, View } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { colors } from '@/theme/colors';
-import type { Location } from '@/types/location';
+import type { MapSpot } from '@/components/MapView';
 
 const SIZE = 30;
 const OUTLINE_WIDTH = 2;
 const RING_WIDTH = 3;
 
-interface SpotMarkerProps {
-    location: Location;
-    onPress?: (location: Location) => void;
+interface SpotMarkerProps<T extends MapSpot> {
+    location: T;
+    onPress?: (location: T) => void;
 }
 
 /**
  * A map marker for a study spot, centered on the spot's coordinates
  */
-export default function SpotMarker({ location, onPress }: SpotMarkerProps) {
+export default function SpotMarker<T extends MapSpot>({ location, onPress }: SpotMarkerProps<T>) {
     return (
         <Marker
             coordinate={{ latitude: location.latitude, longitude: location.longitude }}

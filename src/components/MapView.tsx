@@ -6,6 +6,9 @@ import { isLocationGranted, useLocationPermission } from '@/hooks/useLocationPer
 import { colors } from '@/theme/colors';
 import type { Location } from '@/types/location';
 
+/** The location fields the map needs, so both Location rows and Explore results can be shown */
+export type MapSpot = Pick<Location, 'location_id' | 'name' | 'latitude' | 'longitude'>;
+
 /** Shown until the user's location is known, or if they haven't granted location access */
 const DEFAULT_REGION: Region = {
     latitude: 42.3398,
@@ -22,8 +25,8 @@ const METERS_PER_DEGREE = 111_000;
 
 const BORDER_RADIUS = 24;
 
-interface MapViewComponentProps {
-    locations?: Location[];
+interface MapViewComponentProps<T extends MapSpot> {
+    locations?: T[];
     /** Defaults to filling the parent's width */
     width?: DimensionValue;
     height: DimensionValue;
@@ -31,10 +34,10 @@ interface MapViewComponentProps {
     style?: StyleProp<ViewStyle>;
     interactive?: boolean;
     /** Handles pressing on a location */
-    onLocationPress?: (l: Location) => void;
+    onLocationPress?: (l: T) => void;
 }
 
-export default function MapViewComponent(props: MapViewComponentProps) {
+export default function MapViewComponent<T extends MapSpot>(props: MapViewComponentProps<T>) {
     const mapRef = useRef<MapView>(null);
     const { permission } = useLocationPermission();
     // Only center on the user once, so the map doesn't jump back while they're panning
