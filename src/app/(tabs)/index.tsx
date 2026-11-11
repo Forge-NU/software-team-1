@@ -13,6 +13,7 @@ export default function ExploreRoute() {
           params: { id: String(id) },
         })
       }
+      onOpenSpot={(locationId) => router.push({ pathname: '/spot/[id]', params: { id: String(locationId) } })}
     />
   );
 }
