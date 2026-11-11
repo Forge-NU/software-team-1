@@ -110,6 +110,36 @@ begin
     raise exception 'Sign in to post' using errcode = '42501';
   end if;
 
+  if p_location_id is null then
+    raise exception 'A location is required' using errcode = '23502';
+  end if;
+
+  if p_crowd_level_id is null then
+    raise exception 'A crowd level is required' using errcode = '23502';
+  end if;
+
+  -- Reject non-positive speeds and NaN (NaN is not equal to itself).
+  if p_wifi_mbps is not null and (p_wifi_mbps <= 0 or p_wifi_mbps <> p_wifi_mbps) then
+    raise exception 'Wifi speed must be greater than 0' using errcode = '23514';
+  end if;
+
+  if p_caption is not null and char_length(p_caption) > 500 then
+    raise exception 'Caption must be 500 characters or fewer' using errcode = '23514';
+  end if;
+
+  if not exists (select 1 from public.location l where l.location_id = p_location_id) then
+    raise exception 'Location not found' using errcode = '23503';
+  end if;
+
+  if not exists (select 1 from public.crowd_level c where c.crowd_level_id = p_crowd_level_id) then
+    raise exception 'Unknown crowd level' using errcode = '23503';
+  end if;
+
+  if p_noise_level_id is not null
+     and not exists (select 1 from public.noise_level n where n.noise_level_id = p_noise_level_id) then
+    raise exception 'Unknown noise level' using errcode = '23503';
+  end if;
+
   if coalesce(cardinality(p_photo_paths), 0) < 1 then
     raise exception 'A post needs at least one photo' using errcode = '23514';
   end if;
@@ -121,7 +151,8 @@ begin
       and p.location_id = p_location_id
       and p.created_at > now() - v_spot_cooldown
   ) then
-    raise exception 'You can post at this spot once every 10 minutes.'
+    raise exception 'You can post at this spot once every % minutes.',
+      (extract(epoch from v_spot_cooldown) / 60)::int
       using errcode = '23514';
   end if;
 

@@ -1,0 +1,200 @@
+Command: npm run test:backend
+Date: 2026-11-10 00:20:09 UTC
+Result: 25 passed (129 steps) | 0 failed
+----------------------------------------
+
+
+> spotted@1.0.0 test:backend
+> deno test --config supabase/deno.json --allow-read --allow-env supabase/tests
+
+Check supabase/tests/database/schema_test.ts
+Check supabase/tests/delete-account/handler_test.ts
+Check supabase/tests/explore/ranking_test.ts
+Check supabase/tests/lib/places_test.ts
+Check supabase/tests/osm/overpass_test.ts
+Check supabase/tests/votes/votes_test.ts
+running 12 tests from ./supabase/tests/database/schema_test.ts
+lookup data is seeded ... ok (8ms)
+users ...
+  a profile is created on sign-up, using metadata name or the email prefix ... ok (14ms)
+  user_type only allows student or admin ... ok (6ms)
+  email is unique ... ok (6ms)
+  users can rename themselves but not promote themselves or edit others ... ok (9ms)
+  profiles cannot be inserted directly and are hidden from anon ... ok (8ms)
+  deleting an auth user removes their profile and content ... ok (16ms)
+users ... ok (59ms)
+location ...
+  validates coordinates ... ok (9ms)
+  requires a known location type and allows an optional known campus and price ... ok (4ms)
+  google_place_id is unique, and the Google import function is gone ... ok (2ms)
+  address country_code must be two uppercase letters ... ok (5ms)
+  day_hours has one row per day, supports 24:00 and overnight hours ... ok (5ms)
+  deleting a location removes everything under it ... ok (20ms)
+location ... ok (47ms)
+seating_area ...
+  requires known seat type, capacity and outlet level ... ok (6ms)
+  area is optional but must belong to the same location ... ok (5ms)
+  deleting an area keeps its seating areas but clears area_id ... ok (5ms)
+seating_area ... ok (16ms)
+reviews and overall_ratings ...
+  ratings must be between 1 and 5, overall is required ... ok (8ms)
+  overall_ratings is recalculated on insert, update and delete ... ok (10ms)
+  moving a review to another seat updates both summaries ... ok (6ms)
+  users cannot write overall_ratings directly ... ok (4ms)
+reviews and overall_ratings ... ok (29ms)
+post ...
+  needs a known crowd level, and noise and wifi are optional ... ok (10ms)
+  rejects a caption longer than 500 characters ... ok (8ms)
+  cannot be created without a photo, a missing upload, or another user's folder ... ok (6ms)
+  a direct insert without a photo fails when the constraint is checked ... ok (4ms)
+  saves the post and its photos for the caller ... ok (7ms)
+  a seat from another location is rejected and leaves no post ... ok (6ms)
+  newest post for a location comes first ... ok (7ms)
+  signed-in users can read, and only the owner or an admin can delete ... ok (15ms)
+  signed-in users can upload post photos only into their own folder ... ok (10ms)
+  deleting the location or the author removes the post ... ok (11ms)
+  rejects a second post at the same spot inside the 10-minute window ... ok (11ms)
+  rejects an 11th post within an hour ... ok (32ms)
+post ... ok (128ms)
+review_photo ...
+  reviews can exist with no photos ... ok (6ms)
+  attach is optional and links uploaded files to the author review ... ok (8ms)
+  empty paths are a no-op ... ok (7ms)
+  cannot attach to someone else review or from another user folder ... ok (10ms)
+  deleting a review removes its photos ... ok (8ms)
+review_photo ... ok (40ms)
+flag ...
+  must target exactly one of review, photo, user, or post ... ok (15ms)
+  one report per user per target ... ok (11ms)
+  status is restricted, and reporters can only submit pending flags ... ok (6ms)
+  only the reporter and admins can see flags, and only admins can resolve them ... ok (16ms)
+  open_flags lists pending flags with report_count; only admins see others ... ok (18ms)
+  deleting a reported user removes flags about them ... ok (6ms)
+flag ... ok (74ms)
+follow ... ok (8ms)
+row level security ...
+  anyone can read the catalog, only admins can change it ... ok (11ms)
+  users manage only their own reviews ... ok (10ms)
+  admins can moderate reviews and posts ... ok (7ms)
+row level security ... ok (30ms)
+nearby_locations ...
+  geo_location is computed from latitude and longitude ... ok (20ms)
+  every location has coordinates and a geo_location ... ok (3ms)
+  returns locations within the radius, nearest first ... ok (131ms)
+  breaks distance ties by location_id ... ok (4ms)
+  filters by campus, location type, price range and name ... ok (13ms)
+  name filter matches LIKE wildcards literally ... ok (8ms)
+  the cursor continues after the previous page without gaps or duplicates ... ok (13ms)
+  page_size limits the number of rows ... ok (6ms)
+  rejects invalid input ... ok (12ms)
+nearby_locations ... ok (211ms)
+upsert_osm_places ...
+  only admins and the service role can import ... ok (11ms)
+  creates locations with address and hours, returning ids in order ... ok (5ms)
+  falls back to other when no type is given ... ok (2ms)
+  re-importing refreshes OSM fields but keeps manual type, campus and price ... ok (5ms)
+  re-importing fills in a missing campus ... ok (3ms)
+  missing hours or address leaves existing data alone, an empty week clears hours ... ok (4ms)
+  the same id with a different element type is a different location ... ok (1ms)
+  a failing place rolls back the whole batch ... ok (2ms)
+  rejects payloads that are not an array ... ok (1ms)
+  osm_type and osm_id are validated and set together ... ok (4ms)
+  a location has at most one external source ... ok (3ms)
+upsert_osm_places ... ok (43ms)
+running 3 tests from ./supabase/tests/delete-account/handler_test.ts
+removeFolder / removeUserStorage ...
+  removes every object under the user prefix in both buckets ... ok (1ms)
+  paginates when a folder has more than one page of files ... ok (1ms)
+  removes nested folders under the user prefix ... ok (0ms)
+  still deletes files that sit past a full page of folders ... ok (2ms)
+  stops instead of looping when a page never shrinks ... ok (1ms)
+  stops instead of looping when a folder prefix never disappears ... ok (1ms)
+removeFolder / removeUserStorage ... ok (6ms)
+deleteAuthUser ...
+  removes the auth user ... ok (0ms)
+  treats an already-deleted user as success ... ok (0ms)
+  isUserAlreadyDeleted matches 404 / not-found shapes ... ok (0ms)
+  surfaces unexpected admin errors ... ok (1ms)
+deleteAuthUser ... ok (1ms)
+POST /delete-account ...
+  answers CORS preflight ... ok (3ms)
+  rejects non-POST methods ... ok (0ms)
+  deletes the caller’s storage and auth user; leaves others alone ... ok (1ms)
+  leaves no storage objects for the deleted user ... ok (0ms)
+  cannot delete anyone else: missing/invalid JWT → 401 ... ok (0ms)
+  ignores a foreign userId in the body ... ok (1ms)
+  succeeds when the auth user was already deleted ... ok (0ms)
+POST /delete-account ... ok (6ms)
+running 1 test from ./supabase/tests/explore/ranking_test.ts
+rankSpots ...
+  quiet + chargers returns only matching spots ... ok (3ms)
+  a 3-hour-old packed post is not current ... ok (0ms)
+  latest recent post wins and spots without posts still appear ... ok (0ms)
+  best options ranks uncrowded fresh spots above packed or stale ones ... ok (0ms)
+  type, price, group study, limit and latest photo ... ok (0ms)
+rankSpots ... ok (5ms)
+running 1 test from ./supabase/tests/lib/places_test.ts
+getNearbyLocations ...
+  pages through every location in distance order using nextCursor ... ok (136ms)
+  a full last page has no next page ... ok (5ms)
+  the cursor is the last location's coordinates and id ... ok (5ms)
+  the cursor keeps full coordinate precision, so paging past a tie is exact ... ok (6ms)
+  returns an empty page when nothing is nearby ... ok (1ms)
+  sends filters and asks for one extra row to detect another page ... ok (4ms)
+  an empty name filter is ignored and price range 0 is kept ... ok (2ms)
+  rejects an invalid pageSize or cursor without calling the database ... ok (4ms)
+  throws database errors ... ok (4ms)
+getNearbyLocations ... ok (170ms)
+running 7 tests from ./supabase/tests/osm/overpass_test.ts
+deriveLocationType ... ok (0ms)
+normalizeAddress ...
+  maps addr tags and defaults the country to US ... ok (0ms)
+  uses addr:country when valid ... ok (1ms)
+  returns null without any address tags ... ok (0ms)
+  street without a house number ... ok (0ms)
+normalizeAddress ... ok (1ms)
+normalizeHours ...
+  weekday and weekend hours, skipping holidays ... ok (20ms)
+  open all day ... ok (1ms)
+  hours past midnight belong to the day they opened ... ok (1ms)
+  a later ";" rule for the next day replaces its after-midnight hours, per the OSM syntax ... ok (1ms)
+  Saturday night running into Sunday is not a Sunday opening ... ok (0ms)
+  a break during the day becomes first open to last close ... ok (0ms)
+  always closed is an empty week ... ok (0ms)
+  unparseable values return null ... ok (6ms)
+normalizeHours ... ok (30ms)
+toPayload ...
+  uses node coordinates ... ok (0ms)
+  uses the center of ways and relations, with no campus, address or hours by default ... ok (0ms)
+  skips unnamed or unplaced elements ... ok (0ms)
+toPayload ... ok (1ms)
+queries ...
+  bbox query covers the requested types but not campus buildings ... ok (0ms)
+  campus query marks each campus and uses its OSM name ... ok (0ms)
+  names are escaped ... ok (0ms)
+  campus results are grouped by the preceding marker ... ok (0ms)
+queries ... ok (1ms)
+overpass ...
+  posts the query as a form with an identifying User-Agent ... ok (2ms)
+  retries with backoff while the server is busy ... ok (0ms)
+  gives up after the retries, and does not retry bad queries ... ok (1ms)
+overpass ... ok (3ms)
+collectPlaces ...
+  merges the area and campus results, giving campus places their campus ... ok (1ms)
+  only queries campuses when just campus buildings are requested ... ok (0ms)
+  a place on two campuses keeps the first ... ok (1ms)
+collectPlaces ... ok (1ms)
+running 1 test from ./supabase/tests/votes/votes_test.ts
+vote ...
+  voting the same way twice does not double-count ... ok (24ms)
+  switching up to down moves the score by 2 ... ok (11ms)
+  voting 0 removes the vote, and removing twice is harmless ... ok (9ms)
+  you cannot vote on your own post ... ok (9ms)
+  rejects bad values and signed-out callers ... ok (7ms)
+  RLS: users vote only as themselves and see only their own votes ... ok (11ms)
+  the summary counts everyone but shows my_vote only to the caller ... ok (9ms)
+  deleting a post removes its votes ... ok (8ms)
+vote ... ok (89ms)
+
+ok | 25 passed (129 steps) | 0 failed (12s)
+

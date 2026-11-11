@@ -417,15 +417,23 @@ Deno.test('post', async (t) => {
       await assertPgError(post(9, 2, 50), FOREIGN_KEY)
       await assertPgError(post(3, 9, 50), FOREIGN_KEY)
       await assertPgError(post(3, 2, -1), CHECK)
+      await assertPgError(post(3, 2, 0), CHECK)
       assertEquals(await postCount(db), [{ n: 0 }])
       await post(3, null, null)
     }))
 
-  await t.step('rejects a caption longer than 500 characters', () =>
+  await t.step('rejects a null location and a caption longer than 500 characters', () =>
     withDb(async (db) => {
       const { locationId } = await seed(db)
       const path = photoPath(STUDENT)
       await putPhoto(db, path)
+      await assertPgError(
+        db.as(STUDENT).query(
+          `select public.create_post(null::bigint, null::bigint, 3::smallint, null::smallint, null::real, null::text, $1)`,
+          [[path]],
+        ),
+        NOT_NULL,
+      )
       await assertPgError(createPost(db, STUDENT, locationId, [path], { caption: 'x'.repeat(501) }), CHECK)
       await createPost(db, STUDENT, locationId, [path], { caption: 'x'.repeat(500) })
     }))
@@ -635,10 +643,15 @@ Deno.test('post', async (t) => {
       assertEquals(await postCount(db), [{ n: 2 }])
     }))
 
-  await t.step('rejects an 11th post within an hour', () =>
+  await t.step('rejects posts over the hourly cap from backend_settings', () =>
     withDb(async (db) => {
       const { locationId } = await seed(db)
-      for (let i = 0; i < 10; i++) {
+      // Production default is 100; lower it here so the test stays fast.
+      await db.as(ADMIN).query(
+        `update public.backend_settings set value = '3' where key = 'post_hourly_cap'`,
+      )
+
+      for (let i = 0; i < 3; i++) {
         const path = photoPath(STUDENT, `hourly-${i}.jpg`)
         await putPhoto(db, path)
         const [{ post_id }] = await createPost(db, STUDENT, locationId, [path])
@@ -646,7 +659,7 @@ Deno.test('post', async (t) => {
           post_id,
         ])
       }
-      assertEquals(await postCount(db), [{ n: 10 }])
+      assertEquals(await postCount(db), [{ n: 3 }])
 
       const over = photoPath(STUDENT, 'hourly-over.jpg')
       await putPhoto(db, over)
@@ -661,7 +674,51 @@ Deno.test('post', async (t) => {
           (err as Error).message,
         )
       }
-      assertEquals(await postCount(db), [{ n: 10 }])
+      assertEquals(await postCount(db), [{ n: 3 }])
+    }))
+
+  await t.step('admins can change rate limits without replacing create_post', () =>
+    withDb(async (db) => {
+      const { locationId } = await seed(db)
+      await db.as(ADMIN).query(
+        `update public.backend_settings set value = '1' where key = 'post_spot_cooldown_minutes'`,
+      )
+      const first = photoPath(STUDENT, 'settings-a.jpg')
+      const second = photoPath(STUDENT, 'settings-b.jpg')
+      await putPhoto(db, first)
+      await putPhoto(db, second)
+      const [{ post_id }] = await createPost(db, STUDENT, locationId, [first])
+
+      try {
+        await createPost(db, STUDENT, locationId, [second])
+        throw new Error('Expected Postgres error 23514, but the query succeeded')
+      } catch (err) {
+        assertEquals((err as { code?: string }).code, CHECK)
+        assertEquals(
+          (err as Error).message.includes('once every 1 minute'),
+          true,
+          (err as Error).message,
+        )
+      }
+
+      await db.query(`update public.post set created_at = now() - interval '2 minutes' where post_id = $1`, [
+        post_id,
+      ])
+      await createPost(db, STUDENT, locationId, [second])
+      assertEquals(await postCount(db), [{ n: 2 }])
+
+      assertEquals(
+        await db.as(STUDENT).query(
+          `update public.backend_settings set value = '99' where key = 'post_hourly_cap' returning key`,
+        ),
+        [],
+      )
+      assertEquals(
+        await db.query<{ value: string }>(
+          `select value from public.backend_settings where key = 'post_hourly_cap'`,
+        ),
+        [{ value: '100' }],
+      )
     }))
 })
 

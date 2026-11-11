@@ -29,6 +29,7 @@ supabase/
 | `20261018120000_openstreetmap.sql` | `osm_type`/`osm_id` on `location`, and `upsert_osm_places(jsonb)`, used by the OpenStreetMap import script to save locations, addresses and hours in one transaction |
 | `20261018130000_drop_google_places.sql` | Drops `upsert_google_place`. `google_place_id` is kept for locations imported before the switch |
 | `20261110010000_abuse_controls.sql` | Post rate limits in `create_post`, `flag.post_id` + one-report-per-target, and `open_flags` for admins (no auto-hide) |
+| `20261111010000_backend_settings.sql` | `backend_settings` key/value table; `create_post` reads spot cooldown (10m) and hourly cap (100) from it |
 
 ### Why the filenames look like that
 
