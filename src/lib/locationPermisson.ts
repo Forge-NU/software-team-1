@@ -20,7 +20,7 @@ export type LocationPermission = 'precise' | 'approximate' | 'denied' | 'blocked
 function toLocationPermission(status: ExpoLocation.LocationPermissionResponse): LocationPermission {
     if (status.granted) {
         const aproximate = status.ios?.accuracy === 'reduced' || status.android?.accuracy === 'coarse'
-        return aproximate ? 'precise' : 'approximate'
+        return aproximate ? 'approximate' : 'precise'
     }
     // NOTE: Android, a user can be asked up to 2 times before blocked, iOS is only once
     return status.canAskAgain ? 'denied' : 'blocked'
