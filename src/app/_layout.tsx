@@ -3,6 +3,7 @@ import '../../global.css';
 
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
+import { getFocusedRouteNameFromRoute } from 'expo-router/react-navigation';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -17,6 +18,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { FiltersProvider } from '@/context/FiltersContext';
 import { ProfileProvider } from '@/context/ProfileContext';
 import { useWelcomeSeen } from '@/lib/onboarding';
+import { tabTitle } from '@/lib/tabs';
 import { stackScreenOptions } from '@/theme/navigation';
 
 // Keep the splash screen up until the fonts and saved session are ready
@@ -70,7 +72,11 @@ function RootNavigator() {
 
       {/* Screens for signed-in users. Signed-out users see the welcome carousel once (F-8), then sign up */}
       <Stack.Protected guard={isSignedIn} redirectTo={welcomeSeen ? '/sign-up' : '/welcome'}>
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="(tabs)"
+          // Named after the open tab, so a pushed screen's back menu says e.g. "Profile"
+          options={({ route }) => ({ title: tabTitle(getFocusedRouteNameFromRoute(route)) })}
+        />
         <Stack.Screen name="spot/[id]" options={{ headerShown: true, title: 'Spot detail' }} />
         <Stack.Screen name="spot/photos/[id]" options={{ headerShown: true, title: 'Recent photos' }} />
         <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
