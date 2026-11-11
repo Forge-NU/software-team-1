@@ -1,4 +1,16 @@
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+import { useEffect, useState } from 'react';
+import { Feather } from '@expo/vector-icons';
+import {
+    ActivityIndicator,
+    FlatList,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 
 import { colors, spacing, radius, typography, layout } from '../theme';
 
@@ -13,6 +25,7 @@ import { NU_CAMPUS } from '../lib/exploreSource';
 
 type ExploreScreenProps = {
     onOpenFilters?: () => void;
+    onOpenSearch?: () => void;
     onOpenSpot: (locationId: number) => void;
     latitude?: number;
     longitude?: number;
@@ -24,6 +37,7 @@ const MAP_HEIGHT = 220;
 export default function ExploreScreen({
     onOpenFilters,
     onOpenSpot,
+    onOpenSearch,
     latitude = NU_CAMPUS.latitude,
     longitude = NU_CAMPUS.longitude,
 }: ExploreScreenProps) {
@@ -43,11 +57,28 @@ export default function ExploreScreen({
 
     return (
         <SafeAreaView style={styles.container}>
-
             {/* Header */}
             <View style={styles.header}>
                 <Text style={styles.logo}>Spotted</Text>
             </View>
+
+            {/* F-11: Search bar */}
+            <TouchableOpacity
+                style={styles.searchButton}
+                onPress={onOpenSearch}
+                accessibilityRole="button"
+                accessibilityLabel="Search spots or buildings"
+            >
+                <Feather
+                    name="search"
+                    size={20}
+                    color={colors.textSecondary}
+                />
+
+                <Text style={styles.searchPlaceholder}>
+                    Search spots or buildings
+                </Text>
+            </TouchableOpacity>
 
             {/* Map of the spots matching the current filters */}
             <View style={styles.mapArea}>
@@ -57,7 +88,6 @@ export default function ExploreScreen({
                     onLocationPress={(spot) => onOpenSpot(spot.location_id)}
                 />
             </View>
-
             {/* Filters button and active filter chips */}
             <ScrollView
                 horizontal
@@ -71,7 +101,10 @@ export default function ExploreScreen({
                     accessibilityRole="button"
                 >
                     <Text style={styles.filtersButtonText}>
-                        Filters{activeChips.length > 0 ? ` (${activeChips.length})` : ''}
+                        Filters
+                        {activeChips.length > 0
+                            ? ` (${activeChips.length})`
+                            : ''}
                     </Text>
                 </TouchableOpacity>
 
@@ -83,7 +116,9 @@ export default function ExploreScreen({
                         accessibilityRole="button"
                         accessibilityLabel={`Remove ${chip.label} filter`}
                     >
-                        <Text style={styles.activeChipText}>✓ {chip.label} ×</Text>
+                        <Text style={styles.activeChipText}>
+                            ✓ {chip.label} ×
+                        </Text>
                     </TouchableOpacity>
                 ))}
 
@@ -93,7 +128,9 @@ export default function ExploreScreen({
                         onPress={clearAll}
                         accessibilityRole="button"
                     >
-                        <Text style={styles.clearButtonText}>Clear all</Text>
+                        <Text style={styles.clearButtonText}>
+                            Clear all
+                        </Text>
                     </TouchableOpacity>
                 )}
             </ScrollView>
@@ -124,7 +161,10 @@ export default function ExploreScreen({
 
 // Styles using Spotted's shared theme
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: {
+        flex: 1,
+        backgroundColor: colors.background,
+    },
 
     header: {
         height: layout.headerHeight,
@@ -134,14 +174,50 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
     },
-    logo: { ...typography.bodyStrong, color: colors.primary },
+
+    logo: {
+        ...typography.bodyStrong,
+        color: colors.primary,
+    },
+
+    // F-11 search styles
+    searchButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: radius.pill,
+        marginHorizontal: layout.screenPaddingHorizontal,
+        marginTop: spacing.md,
+        marginBottom: spacing.md,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        minHeight: 48,
+    },
+
+    searchPlaceholder: {
+        ...typography.body,
+        color: colors.textSecondary,
+    },
 
     mapArea: {
         paddingHorizontal: layout.screenPaddingHorizontal,
         paddingTop: spacing.md,
     },
 
-    chipRow: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
+    mapPlaceholderText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+    },
+
+    chipRow: {
+        flexGrow: 0,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+    },
+
     chipRowContent: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -158,7 +234,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.xs,
     },
-    filtersButtonText: { ...typography.captionStrong, color: colors.textPrimary },
+
+    filtersButtonText: {
+        ...typography.captionStrong,
+        color: colors.textPrimary,
+    },
 
     activeChip: {
         borderRadius: radius.pill,
@@ -168,10 +248,21 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.primary,
     },
-    activeChipText: { ...typography.tag, color: colors.textOnPrimaryLight },
 
-    clearButton: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-    clearButtonText: { ...typography.captionStrong, color: colors.primaryDark },
+    activeChipText: {
+        ...typography.tag,
+        color: colors.textOnPrimaryLight,
+    },
+
+    clearButton: {
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xs,
+    },
+
+    clearButtonText: {
+        ...typography.captionStrong,
+        color: colors.primaryDark,
+    },
 
     notice: {
         ...typography.caption,
