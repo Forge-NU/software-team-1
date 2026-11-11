@@ -19,7 +19,8 @@ import {
 
 export default function AuthCallbackScreen() {
     const router = useRouter();
-    const url = Linking.useURL();
+    // useLinkingURL has the link right away, including one tapped while the app was already open
+    const url = Linking.useLinkingURL();
 
     const lastProcessedUrl = useRef<string | null>(null);
 

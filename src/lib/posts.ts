@@ -1,3 +1,4 @@
+import { randomUUID } from 'expo-crypto'
 import { supabase } from './supabase'
 
 const BUCKET = 'post-photos'
@@ -133,7 +134,7 @@ export async function createPost(input: CreatePostInput): Promise<number> {
   const uploaded: string[] = []
   try {
     for (const photo of input.photos) {
-      const path = `${user.id}/${crypto.randomUUID()}.${extensionFor(photo.contentType)}`
+      const path = `${user.id}/${randomUUID()}.${extensionFor(photo.contentType)}`
       const { error } = await supabase.storage.from(BUCKET).upload(path, photo.data, {
         contentType: photo.contentType,
         upsert: false,

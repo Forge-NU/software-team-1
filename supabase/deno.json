@@ -3,6 +3,7 @@
   "lock": false,
   "imports": {
     "../src/lib/supabase": "./tests/lib/supabase.ts",
+    "../src/lib/authRedirect": "./tests/lib/authRedirect.ts",
     "../src/lib/authLinks": "../src/lib/authLinks.ts"
   },
   "tasks": {
