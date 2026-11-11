@@ -2,7 +2,6 @@ import { ActivityIndicator, View } from 'react-native';
 
 import { FormMessage } from '@/components/FormMessage';
 import { SpotCard } from '@/components/SpotCard';
-import TopBar from '@/components/TopBar';
 import { Button, Screen, Text } from '@/components/ui';
 import { useNow } from '@/hooks/useNow';
 import { useSavedSpots } from '@/hooks/useSavedSpots';
@@ -47,7 +46,7 @@ export default function SavedScreen({ onOpenSpot, onFindSpots }: SavedScreenProp
   }
 
   return (
-    <Screen header={<TopBar title="Saved" />} scroll contentClassName="gap-lg py-xl">
+    <Screen scroll contentClassName="gap-lg py-xl">
       <View className="gap-xxs">
         <Text variant="title" accessibilityRole="header">
           Your go-to study spots.

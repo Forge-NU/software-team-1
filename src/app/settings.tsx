@@ -5,5 +5,5 @@ import SettingsScreen from '@/screens/SettingsScreen';
 export default function SettingsRoute() {
   const router = useRouter();
 
-  return <SettingsScreen onBack={router.back} onOpenPreferences={() => router.push('/preferences')} />;
+  return <SettingsScreen onOpenPreferences={() => router.push('/preferences')} />;
 }

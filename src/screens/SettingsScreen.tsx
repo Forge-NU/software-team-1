@@ -3,13 +3,11 @@ import { AppState, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 
 import { Feather } from '@expo/vector-icons'
 import { useFocusEffect } from 'expo-router'
 import { useProfile } from '../context/ProfileContext'
-import TopBar from '../components/TopBar'
 import { colors, layout, radius, spacing, typography } from '../theme'
 import { summarizePreferences } from '../lib/profile'
 import { getLocationPermission, LocationPermission, openAppSettings } from '../lib/locationPermisson'
 
 export interface SettingsScreenProps {
-  onBack?: () => void
   onOpenPreferences: () => void
 }
 
@@ -37,7 +35,7 @@ function Row({ title, subtitle, onPress }: { title: string; subtitle: string; on
   )
 }
 
-export default function SettingsScreen({ onBack, onOpenPreferences }: SettingsScreenProps) {
+export default function SettingsScreen({ onOpenPreferences }: SettingsScreenProps) {
   // Preferences live in ProfileContext so the last loaded values show right away on return
   const { profile, preferences, refreshPreferences, savePreferences } = useProfile()
   const prefsLoaded = preferences !== null
@@ -120,9 +118,8 @@ export default function SettingsScreen({ onBack, onOpenPreferences }: SettingsSc
 
   return (
     <View style={styles.screen}>
-      <TopBar title="Settings" size="large" onBack={onBack} />
-
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* Starts below the glass header (iOS 26) but scrolls up under it */}
+      <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
         <Text style={styles.section}>Notifications</Text>
         <View style={[styles.card, styles.notifCard]}>
           <View style={styles.toggleRow}>

@@ -25,9 +25,15 @@ export function Screen({ header, scroll = false, padBottom = false, contentClass
       {scroll ? (
         <ScrollView
           className="flex-1"
-          contentContainerClassName={`grow ${contentClass}`}
+          // No `grow`: iOS adds the header and tab bar insets on top of the content height,
+          // so stretching it to fill the view would make a short page scrollable
+          contentContainerClassName={contentClass}
           contentContainerStyle={bottom}
           keyboardShouldPersistTaps="handled"
+          // Under a native header (iOS 26 glass), starts below it but scrolls up under it.
+          // Keep vertical bounce on (the default): iOS only applies these insets when the
+          // page counts as scrollable, so turning it off leaves short pages under the header
+          contentInsetAdjustmentBehavior="automatic"
         >
           {children}
         </ScrollView>

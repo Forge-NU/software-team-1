@@ -1,16 +1,12 @@
 
-import { useEffect, useState } from 'react';
 import { Feather } from '@expo/vector-icons';
 import {
-    ActivityIndicator,
-    FlatList,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, typography, layout } from '../theme';
 
@@ -44,8 +40,6 @@ export default function ExploreScreen({
     // Shared filters: the same ones the Filters screen edits
     const { filters, activeChips, removeChip, clearAll } = useFilters();
     const exploreFilters = toExploreFilters(filters);
-    // Top inset only: the list runs under the native tab bar and insets itself
-    const { top } = useSafeAreaInsets();
     const unsupported = getUnsupportedLabels(filters);
 
     // One fetch for the whole screen: the map and the list both render these `spots`.
@@ -58,12 +52,10 @@ export default function ExploreScreen({
     });
 
     return (
-        <View style={[styles.container, { paddingTop: top }]}>
-            {/* Header */}
-            <View style={styles.header}>
-                <Text style={styles.logo}>Spotted</Text>
-            </View>
-
+        // One scroll for the whole page (search, map, chips, results). The tab's native header
+        // shows the title, and iOS insets the content for the glass header and tab bar, so it
+        // starts below the header and the last card can still scroll clear of the tab bar
+        <ScrollView style={styles.container} contentInsetAdjustmentBehavior="automatic">
             {/* F-11: Search bar */}
             <TouchableOpacity
                 style={styles.searchButton}
@@ -145,12 +137,7 @@ export default function ExploreScreen({
             )}
 
             {/* Results (F-3): ranked SpotCards, with loading, error and empty states */}
-            <ScrollView
-                contentContainerStyle={styles.list}
-                // iOS adds the tab bar height as a scroll inset, so cards scroll
-                // under the glass bar but the last one can still scroll clear of it
-                contentInsetAdjustmentBehavior="automatic"
-            >
+            <View style={styles.list}>
                 <ExploreSpotList
                     spots={spots}
                     loading={loading}
@@ -161,8 +148,8 @@ export default function ExploreScreen({
                     onRetry={refresh}
                     onClearFilters={clearAll}
                 />
-            </ScrollView>
-        </View>
+            </View>
+        </ScrollView>
     );
 }
 
@@ -171,20 +158,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
-    },
-
-    header: {
-        height: layout.headerHeight,
-        backgroundColor: colors.surface,
-        justifyContent: 'center',
-        paddingHorizontal: layout.screenPaddingHorizontal,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-
-    logo: {
-        ...typography.bodyStrong,
-        color: colors.primary,
     },
 
     // F-11 search styles
@@ -278,5 +251,6 @@ const styles = StyleSheet.create({
         paddingTop: spacing.sm,
     },
 
-    list: { padding: layout.screenPaddingHorizontal, flexGrow: 1 },
+    // No flexGrow: iOS adds the header and tab bar insets on top, so a short page would scroll
+    list: { padding: layout.screenPaddingHorizontal },
 });

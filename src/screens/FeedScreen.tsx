@@ -1,9 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
 
 import { FeedCard } from '@/components/feed/FeedCard';
-import TopBar from '@/components/TopBar';
 import { Text } from '@/components/ui';
 import { getCampusFeed, type FeedCursor, type FeedPost } from '@/lib/posts';
 import { colors } from '@/theme';
@@ -156,19 +155,21 @@ export default function FeedScreen({ onOpenSpot }: FeedScreenProps) {
 
   return (
     <View className="flex-1 bg-background">
-      <TopBar
-        title="Feed"
-        right={
-          <Pressable
-            onPress={refresh}
-            disabled={refreshing}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Refresh feed"
-          >
-            <Text variant="caption">Refresh</Text>
-          </Pressable>
-        }
+      {/* The tab's native header shows the title; Refresh goes in its right slot */}
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <Pressable
+              onPress={refresh}
+              disabled={refreshing}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh feed"
+            >
+              <Text variant="caption">Refresh</Text>
+            </Pressable>
+          ),
+        }}
       />
       <FlatList
         data={posts}
@@ -188,6 +189,8 @@ export default function FeedScreen({ onOpenSpot }: FeedScreenProps) {
         }
         ItemSeparatorComponent={() => <View className="h-sm" />}
         contentContainerClassName="px-gutter"
+        // Starts below the glass header (iOS 26) but scrolls up under it
+        contentInsetAdjustmentBehavior="automatic"
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
         refreshControl={

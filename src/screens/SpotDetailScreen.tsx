@@ -8,13 +8,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Stack } from 'expo-router';
 
 import AmenitiesCard from '../components/spot/AmenitiesCard';
 import PhotoStrip from '../components/spot/PhotoStrip';
 import RecentUpdates from '../components/spot/RecentUpdates';
 import SaveButton from '../components/spot/SaveButton';
 import StatusBox from '../components/spot/StatusBox';
-import TopBar from '../components/TopBar';
 import { useSpotBookmark } from '../hooks/useSpotBookmark';
 import { useSpotDetails } from '../hooks/useSpotDetails';
 import { formatFloor, getAmenities, outletLevelForPost } from '../lib/spot';
@@ -89,15 +89,17 @@ export default function SpotDetailScreen({
 
   return (
     <View style={styles.container}>
-      <TopBar
-        title="Spot detail"
-        onBack={onBack}
-        right={<SaveButton saved={saved} onPress={toggleSaved} />}
+      <Stack.Screen
+        options={{
+          headerRight: () => <SaveButton saved={saved} onPress={toggleSaved} />,
+        }}
       />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        // Starts below the glass header (iOS 26) but scrolls up under it
+        contentInsetAdjustmentBehavior="automatic"
       >
         <View style={styles.header}>
           <Text style={styles.spotName}>
