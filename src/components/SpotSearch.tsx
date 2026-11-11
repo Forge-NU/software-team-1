@@ -15,7 +15,7 @@ import {
 } from '@expo/vector-icons'
 
 import Badge from './Badge'
-import FlowHeader from './FlowHeader'
+import { useHeaderOverlap } from '../hooks/useHeaderOverlap'
 import {
     getSearchOrigin,
     type SearchOrigin,
@@ -33,7 +33,6 @@ import {
 
 interface SpotSearchProps {
     onSelect: (spot: SpotSummary) => void
-    onCancel: () => void
     variant?: 'explore' | 'checkIn'
 }
 
@@ -69,9 +68,9 @@ function reportedAgo(iso: string): string {
 
 export default function SpotSearch({
     onSelect,
-    onCancel,
     variant = 'explore',
 }: SpotSearchProps) {
+    const headerOverlap = useHeaderOverlap()
     const [query, setQuery] = useState('')
     const [results, setResults] = useState<SpotSummary[]>([])
     const [loading, setLoading] = useState(false)
@@ -336,13 +335,9 @@ export default function SpotSearch({
     }
 
     return (
-        <View style={styles.screen}>
-            {/* Shared header with Back and Cancel */}
-            <FlowHeader
-                title="Search"
-                onBack={onCancel}
-                onCancel={onCancel}
-            />
+        // The native stack header shows the title and back button. The search field is
+        // pinned, so pad it below the glass header (iOS 26)
+        <View style={[styles.screen, { paddingTop: headerOverlap }]}>
 
             {/* Figma-style search input */}
             <View style={styles.searchContainer}>
@@ -387,6 +382,8 @@ export default function SpotSearch({
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.resultsList}
+                // Results scroll under the glass tab bar, but the last one can still scroll clear of it
+                contentInsetAdjustmentBehavior="automatic"
                 ItemSeparatorComponent={() => (
                     <View style={styles.cardSeparator} />
                 )}

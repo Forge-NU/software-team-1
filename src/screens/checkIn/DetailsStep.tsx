@@ -18,7 +18,6 @@ import {
   Noise,
   NOISE_OPTIONS,
 } from '../../lib/checkIn'
-import FlowHeader from '../../components/FlowHeader'
 import Button from '../../components/Button'
 import { colors, layout, radius, spacing, typography } from '../../theme'
 
@@ -37,8 +36,6 @@ interface DetailsStepProps {
   onNote: (v: string) => void
   onRetake: () => void
   onSubmit: () => void
-  onBack: () => void
-  onCancel: () => void
   submitting: boolean
   progress: number
   submitError: string | null
@@ -78,7 +75,7 @@ function Chips<T extends string>({
 export default function DetailsStep(props: DetailsStepProps) {
   const {
     spotName, photo, crowding, noise, outlets, note,
-    onCrowding, onNoise, onOutlets, onNote, onRetake, onSubmit, onBack, onCancel,
+    onCrowding, onNoise, onOutlets, onNote, onRetake, onSubmit,
     submitting, progress, submitError,
   } = props
 
@@ -94,9 +91,12 @@ export default function DetailsStep(props: DetailsStepProps) {
       style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <FlowHeader title="Check in" onBack={submitting ? undefined : onBack} onCancel={submitting ? undefined : onCancel} cancelStyle="pill" />
-
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        // Starts below the glass header (iOS 26) but scrolls up under it
+        contentInsetAdjustmentBehavior="automatic"
+      >
         <Text style={styles.step}>STEP 2 OF 2 · CONDITIONS</Text>
         <Text style={styles.spotName}>{spotName}</Text>
 

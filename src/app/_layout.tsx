@@ -87,8 +87,7 @@ function RootNavigator() {
         <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
         <Stack.Screen name="preferences" options={{ headerShown: true, title: 'Study preferences' }} />
         <Stack.Screen name="filters" options={{ headerShown: true, title: 'Filters' }} />
-        {/* F-11: search draws its own Back/Cancel header */}
-        <Stack.Screen name="search" />
+        <Stack.Screen name="search" options={{ headerShown: true, title: 'Search' }} />
         {/* Full-screen prompt with its own buttons, so no header or swipe-back */}
         <Stack.Screen name="location-permission" options={{ gestureEnabled: false }} />
       </Stack.Protected>
