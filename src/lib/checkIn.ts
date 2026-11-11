@@ -8,7 +8,7 @@ import { mockSpots } from './mocks/checkInMocks'
 
 // Separate from profile.ts's flag so check-ins can go live on their own.
 // Real posting needs a signed-in user (F-1) since createPost() checks auth.
-export const USE_MOCK_CHECK_INS = true
+export const USE_MOCK_CHECK_INS = false
 
 // ---------- Types ----------
 

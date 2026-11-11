@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { StyleSheet, View, type DimensionValue, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { type Region, type UserLocationChangeEvent } from 'react-native-maps';
 import SpotMarker from '@/components/SpotMarker';
+import { Text } from '@/components/ui/Text';
 import { isLocationGranted, useLocationPermission } from '@/hooks/useLocationPermission';
 import { colors } from '@/theme/colors';
 import type { Location } from '@/types/location';
@@ -63,8 +64,7 @@ export default function MapViewComponent<T extends MapSpot>(props: MapViewCompon
     };
 
     // TODO: Prompt for location permission if not granted and possible
-    // TODO: © OpenStreetMap contributors
-    
+
     // Two wrappers: the outer one carries size, border and shadow, and the inner one clips the map to the rounded corners
     // NOTE: They can't be combined, since clipping on iOS also hides the shadow, and Android map views ignore borderRadius on themselves
     return (
@@ -87,6 +87,11 @@ export default function MapViewComponent<T extends MapSpot>(props: MapViewCompon
                         />
                     ))}
                 </MapView>
+                {/* Spot locations come from OpenStreetMap, whose license (ODbL) requires this credit.
+                    Bottom right, so it doesn't cover the map provider's own logo and legal link. */}
+                <View style={styles.attribution} pointerEvents="none">
+                    <Text variant="caption" color="textSecondary">© OpenStreetMap contributors</Text>
+                </View>
             </View>
         </View>
     );
@@ -102,5 +107,15 @@ const styles = StyleSheet.create({
         flex: 1,
         borderRadius: BORDER_RADIUS,
         overflow: 'hidden',
+    },
+    attribution: {
+        position: 'absolute',
+        right: 0,
+        bottom: 0,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderTopLeftRadius: 8,
+        backgroundColor: colors.surface,
+        opacity: 0.85,
     },
 });
