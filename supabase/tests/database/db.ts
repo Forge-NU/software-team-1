@@ -14,6 +14,7 @@ const SUPABASE_STUBS = `
   create role anon nologin;
   create role authenticated nologin;
   create role service_role nologin bypassrls;
+  create role supabase_auth_admin nologin;
   create schema auth;
   create schema extensions;
   grant usage on schema extensions to anon, authenticated;
