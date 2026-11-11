@@ -4,13 +4,13 @@ import { Feather } from '@expo/vector-icons';
 import {
     ActivityIndicator,
     FlatList,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, typography, layout } from '../theme';
 
@@ -44,6 +44,8 @@ export default function ExploreScreen({
     // Shared filters: the same ones the Filters screen edits
     const { filters, activeChips, removeChip, clearAll } = useFilters();
     const exploreFilters = toExploreFilters(filters);
+    // Top inset only: the list runs under the native tab bar and insets itself
+    const { top } = useSafeAreaInsets();
     const unsupported = getUnsupportedLabels(filters);
 
     // One fetch for the whole screen: the map and the list both render these `spots`.
@@ -56,7 +58,7 @@ export default function ExploreScreen({
     });
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={[styles.container, { paddingTop: top }]}>
             {/* Header */}
             <View style={styles.header}>
                 <Text style={styles.logo}>Spotted</Text>
@@ -143,7 +145,12 @@ export default function ExploreScreen({
             )}
 
             {/* Results (F-3): ranked SpotCards, with loading, error and empty states */}
-            <ScrollView contentContainerStyle={styles.list}>
+            <ScrollView
+                contentContainerStyle={styles.list}
+                // iOS adds the tab bar height as a scroll inset, so cards scroll
+                // under the glass bar but the last one can still scroll clear of it
+                contentInsetAdjustmentBehavior="automatic"
+            >
                 <ExploreSpotList
                     spots={spots}
                     loading={loading}
@@ -155,7 +162,7 @@ export default function ExploreScreen({
                     onClearFilters={clearAll}
                 />
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 

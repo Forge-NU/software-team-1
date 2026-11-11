@@ -1,42 +1,50 @@
 import { useEffect, type ComponentProps } from 'react';
-import { View } from 'react-native';
-import { Tabs, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { NativeTabs } from 'expo-router/native-tabs';
 import { Feather } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { shouldShowLocationPrompt } from '@/lib/locationPermisson';
 import { takePreferencesPending } from '@/lib/onboarding';
 import { colors, typography } from '@/theme';
 
-type IconName = ComponentProps<typeof Feather>['name'];
+type FeatherName = ComponentProps<typeof Feather>['name'];
 
 // Order, labels and icons from the Figma "bottom-nav" (Hi-Fis > Explore).
 // `name` is the route file in this folder. To change a tab, edit this list and that file.
-const TABS: { name: string; title: string; icon: IconName }[] = [
-  { name: 'index', title: 'Explore', icon: 'map' },
-  { name: 'feed', title: 'Feed', icon: 'globe' },
-  { name: 'saved', title: 'Saved', icon: 'bookmark' },
-  { name: 'check-in', title: 'Check in', icon: 'check-circle' },
-  { name: 'profile', title: 'Profile', icon: 'user' },
-];
+// iOS uses the SF Symbols (outline by default, filled when selected) so the native
+// Liquid Glass bar looks right; Android and web fall back to the Feather icon.
+const TABS = [
+  { name: 'index', title: 'Explore', sf: { default: 'map', selected: 'map.fill' }, feather: 'map' },
+  { name: 'feed', title: 'Feed', sf: { default: 'globe', selected: 'globe' }, feather: 'globe' },
+  {
+    name: 'saved',
+    title: 'Saved',
+    sf: { default: 'bookmark', selected: 'bookmark.fill' },
+    feather: 'bookmark',
+  },
+  {
+    name: 'check-in',
+    title: 'Check in',
+    sf: { default: 'checkmark.circle', selected: 'checkmark.circle.fill' },
+    feather: 'check-circle',
+  },
+  {
+    name: 'profile',
+    title: 'Profile',
+    sf: { default: 'person', selected: 'person.fill' },
+    feather: 'user',
+  },
+] as const satisfies readonly {
+  name: string;
+  title: string;
+  sf: { default: string; selected: string };
+  feather: FeatherName;
+}[];
 
-const BAR_HEIGHT = 72;
-
-/** Icon inside a round tile: filled when the tab is active, outlined when it isn't. */
-function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
-  return (
-    <View
-      className={`h-9 w-9 items-center justify-center rounded-pill ${
-        focused ? 'bg-primaryLight' : 'border border-border bg-surface'
-      }`}
-    >
-      <Feather name={name} size={20} color={focused ? colors.primaryDark : colors.textSecondary} />
-    </View>
-  );
-}
+// Native tab labels accept only font family/size/style/weight/color (no lineHeight).
+const { fontFamily, fontSize } = typography.tab;
 
 export default function TabLayout() {
-  const { bottom } = useSafeAreaInsets();
   const router = useRouter();
 
   // After sign up, Figma's order is the location prompt, then Study preferences (F-8).
@@ -49,31 +57,31 @@ export default function TabLayout() {
   }, [router]);
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primaryDark,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarLabelStyle: typography.tab,
-        tabBarStyle: {
-          height: BAR_HEIGHT + bottom,
-          paddingTop: 8,
-          backgroundColor: colors.surface,
-          borderTopColor: colors.primaryLight,
-        },
-        sceneStyle: { backgroundColor: colors.background },
+    <NativeTabs
+      tintColor={colors.primaryDark}
+      iconColor={{ default: colors.textSecondary, selected: colors.primaryDark }}
+      labelStyle={{
+        default: { fontFamily, fontSize, color: colors.textSecondary },
+        selected: { fontFamily, fontSize, color: colors.primaryDark },
       }}
+      // Pre-iOS 26 and Android only; iOS 26+ draws its own glass background.
+      backgroundColor={colors.surface}
+      indicatorColor={colors.primaryLight}
+      minimizeBehavior="onScrollDown"
     >
       {TABS.map((tab) => (
-        <Tabs.Screen
+        <NativeTabs.Trigger
           key={tab.name}
           name={tab.name}
-          options={{
-            title: tab.title,
-            tabBarIcon: ({ focused }) => <TabIcon name={tab.icon} focused={focused} />,
-          }}
-        />
+          contentStyle={{ backgroundColor: colors.background }}
+        >
+          <NativeTabs.Trigger.Label>{tab.title}</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Icon
+            sf={tab.sf}
+            src={<NativeTabs.Trigger.VectorIcon family={Feather} name={tab.feather} />}
+          />
+        </NativeTabs.Trigger>
       ))}
-    </Tabs>
+    </NativeTabs>
   );
 }
