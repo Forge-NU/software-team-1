@@ -25,7 +25,6 @@ import { NU_CAMPUS } from '../lib/exploreSource';
 
 type ExploreScreenProps = {
     onOpenFilters?: () => void;
-    onOpenSpot?: (locationId: number) => void;
     onOpenSearch?: () => void;
     onOpenSpot: (locationId: number) => void;
     latitude?: number;

@@ -7,12 +7,6 @@ export default function ExploreRoute() {
     <ExploreScreen
       onOpenFilters={() => router.push('/filters')}
       onOpenSearch={() => router.push('/search')}
-      onOpenSpot={(id) =>
-        router.push({
-          pathname: '/spot/[id]',
-          params: { id: String(id) },
-        })
-      }
       onOpenSpot={(locationId) => router.push({ pathname: '/spot/[id]', params: { id: String(locationId) } })}
     />
   );
