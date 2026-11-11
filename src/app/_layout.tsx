@@ -80,6 +80,7 @@ function RootNavigator() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="preferences" />
         <Stack.Screen name="filters" />
+        <Stack.Screen name="location-permission" options={{ gestureEnabled: false }} />
       </Stack.Protected>
 
       {/* Screens for signed-out users */}

@@ -4,14 +4,15 @@ import { colors } from '@/theme';
 
 import { Text } from './Text';
 
-type Variant = 'primary' | 'secondary';
-
 const variants = {
   // Figma "BtnBlock" ("Create account")
   primary: { container: 'bg-primaryDark', label: 'textOnPrimary' },
   // Figma "BtnPrimary" ("Sign in with Northeastern")
   secondary: { container: 'bg-primaryLight', label: 'textOnPrimaryLight' },
+  outline: { container: 'bg-surface', label: 'primaryDark' },
 } as const;
+
+type Variant = keyof typeof variants;
 
 export interface ButtonProps {
   label: string;
