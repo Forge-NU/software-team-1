@@ -4,7 +4,7 @@
 -- after 3+ pending reports.
 
 -- Tunable limits for create_post (keep in sync with the function body below).
--- Spot cooldown: 10 minutes. Per-user hourly cap: 10 posts.
+-- Spot cooldown: 10 minutes. Per-user hourly cap: 100 posts.
 
 -- ---------------------------------------------------------------------------
 -- Flag: report a post; exactly one target; one report per user per target
@@ -79,7 +79,7 @@ revoke all on public.open_flags from public, anon;
 grant select on public.open_flags to authenticated;
 
 -- ---------------------------------------------------------------------------
--- create_post: at most 1 post per user per spot per 10 minutes; 10 / hour
+-- create_post: at most 1 post per user per spot per 10 minutes; 100 / hour
 -- ---------------------------------------------------------------------------
 
 create index if not exists post_user_id_location_id_created_at_idx
@@ -104,7 +104,7 @@ declare
   v_post_id bigint;
   -- Tunable: keep in sync with the migration header comment.
   v_spot_cooldown interval := interval '10 minutes';
-  v_hourly_cap int := 10;
+  v_hourly_cap int := 100;
 begin
   if v_uid is null then
     raise exception 'Sign in to post' using errcode = '42501';
