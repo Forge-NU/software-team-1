@@ -10,11 +10,13 @@ import { colors, typography } from '@/theme';
 type FeatherName = ComponentProps<typeof Feather>['name'];
 
 // Order, labels and icons from the Figma "bottom-nav" (Hi-Fis > Explore).
-// `name` is the route file in this folder. To change a tab, edit this list and that file.
+// `name` is the tab's folder here; each folder has a _layout.tsx (its own stack, so the tab gets
+// the native header) and an index.tsx (the screen). Explore is the `(explore)` group so it stays at "/".
+// Check in has no stack: its flow draws its own step headers.
 // iOS uses the SF Symbols (outline by default, filled when selected) so the native
 // Liquid Glass bar looks right; Android and web fall back to the Feather icon.
 const TABS = [
-  { name: 'index', title: 'Explore', sf: { default: 'map', selected: 'map.fill' }, feather: 'map' },
+  { name: '(explore)', title: 'Explore', sf: { default: 'map', selected: 'map.fill' }, feather: 'map' },
   { name: 'feed', title: 'Feed', sf: { default: 'globe', selected: 'globe' }, feather: 'globe' },
   {
     name: 'saved',

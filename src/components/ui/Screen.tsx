@@ -28,6 +28,8 @@ export function Screen({ header, scroll = false, padBottom = false, contentClass
           contentContainerClassName={`grow ${contentClass}`}
           contentContainerStyle={bottom}
           keyboardShouldPersistTaps="handled"
+          // Under a native header (iOS 26 glass), starts below it but scrolls up under it
+          contentInsetAdjustmentBehavior="automatic"
         >
           {children}
         </ScrollView>

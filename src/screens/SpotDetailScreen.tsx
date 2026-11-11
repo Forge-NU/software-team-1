@@ -8,12 +8,12 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Stack } from 'expo-router';
 
 import AmenitiesCard from '../components/spot/AmenitiesCard';
 import PhotoStrip from '../components/spot/PhotoStrip';
 import RecentUpdates from '../components/spot/RecentUpdates';
 import StatusBox from '../components/spot/StatusBox';
-import TopBar from '../components/TopBar';
 import { useSpotDetails } from '../hooks/useSpotDetails';
 import { formatFloor, getAmenities, outletLevelForPost } from '../lib/spot';
 import type { Location } from '../types/location';
@@ -86,23 +86,26 @@ export default function SpotDetailScreen({
 
   return (
     <View style={styles.container}>
-      <TopBar
-        title="Spot detail"
-        right={
-          // Bookmarking is not wired up yet, so this is a static button.
-          <Pressable
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Save spot"
-          >
-            <Text style={styles.saveText}>Save</Text>
-          </Pressable>
-        }
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            // Bookmarking is not wired up yet, so this is a static button.
+            <Pressable
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Save spot"
+            >
+              <Text style={styles.saveText}>Save</Text>
+            </Pressable>
+          ),
+        }}
       />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        // Starts below the glass header (iOS 26) but scrolls up under it
+        contentInsetAdjustmentBehavior="automatic"
       >
         <View style={styles.header}>
           <Text style={styles.spotName}>
@@ -202,8 +205,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   saveText: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    ...typography.bodyStrong,
+    color: colors.primaryDark,
   },
   scrollContent: {
     padding: layout.screenPaddingHorizontal,

@@ -8,7 +8,6 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, typography, layout } from '../theme';
 
@@ -65,8 +64,6 @@ export default function ExploreScreen({
 }: ExploreScreenProps) {
     // Shared filters: the same ones the Filters screen edits
     const { filters, activeChips, removeChip, clearAll } = useFilters();
-    // Top inset only: the list runs under the native tab bar and insets itself
-    const { top } = useSafeAreaInsets();
 
     const [spots, setSpots] = useState<ExploreSpot[]>([]);
     const [loading, setLoading] = useState(true);
@@ -166,14 +163,10 @@ export default function ExploreScreen({
         );
     };
 
-    return (
-        <View style={[styles.container, { paddingTop: top }]}>
-
-            {/* Header */}
-            <View style={styles.header}>
-                <Text style={styles.logo}>Spotted</Text>
-            </View>
-
+    // Map, filter chips and notices scroll with the results as the list's header, so the
+    // whole page starts below the glass header (iOS 26) and scrolls up under it
+    const listHeader = (
+        <View style={styles.listHeader}>
             {/* Map of the spots matching the current filters */}
             <View style={styles.mapArea}>
                 <MapViewComponent
@@ -233,35 +226,28 @@ export default function ExploreScreen({
             {loading && (
                 <ActivityIndicator color={colors.primaryDark} style={styles.spinner} />
             )}
-
-            {/* Results */}
-            <FlatList
-                data={loading ? [] : spots}
-                keyExtractor={(item) => String(item.location_id)}
-                renderItem={renderSpot}
-                ListEmptyComponent={renderEmpty}
-                contentContainerStyle={styles.list}
-                // iOS adds the tab bar height as a scroll inset, so cards scroll
-                // under the glass bar but the last one can still scroll clear of it
-                contentInsetAdjustmentBehavior="automatic"
-            />
         </View>
+    );
+
+    return (
+        <FlatList
+            style={styles.container}
+            data={loading ? [] : spots}
+            keyExtractor={(item) => String(item.location_id)}
+            renderItem={renderSpot}
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={renderEmpty}
+            contentContainerStyle={styles.list}
+            // iOS insets the content for the glass header and tab bar, so it starts
+            // below the header and the last card can still scroll clear of the tab bar
+            contentInsetAdjustmentBehavior="automatic"
+        />
     );
 }
 
 // Styles using Spotted's shared theme
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-
-    header: {
-        height: layout.headerHeight,
-        backgroundColor: colors.surface,
-        justifyContent: 'center',
-        paddingHorizontal: layout.screenPaddingHorizontal,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    logo: { ...typography.bodyStrong, color: colors.primary },
 
     mapArea: {
         paddingHorizontal: layout.screenPaddingHorizontal,
@@ -309,9 +295,12 @@ const styles = StyleSheet.create({
 
     spinner: { marginTop: spacing.lg },
 
-    list: { padding: layout.screenPaddingHorizontal, gap: spacing.sm, flexGrow: 1 },
+    listHeader: { marginBottom: spacing.xs },
+
+    list: { gap: spacing.sm, paddingBottom: layout.screenPaddingHorizontal, flexGrow: 1 },
 
     card: {
+        marginHorizontal: layout.screenPaddingHorizontal,
         backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
@@ -346,5 +335,6 @@ const styles = StyleSheet.create({
         color: colors.danger,
         textAlign: 'center',
         paddingVertical: spacing.lg,
+        paddingHorizontal: layout.screenPaddingHorizontal,
     },
 });

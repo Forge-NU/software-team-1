@@ -2,13 +2,11 @@ import React, { useState } from 'react'
 import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useProfile } from '../context/ProfileContext'
-import TopBar from '../components/TopBar'
 import { colors, layout, radius, spacing, typography } from '../theme'
 
 // Placeholder for F-7, built from the hi-fi Settings frame. The toggle and the
 // preferences summary aren't saved anywhere yet.
 export interface SettingsScreenProps {
-  onBack?: () => void
   onOpenPreferences: () => void
 }
 
@@ -24,15 +22,14 @@ function Row({ title, subtitle, onPress }: { title: string; subtitle: string; on
   )
 }
 
-export default function SettingsScreen({ onBack, onOpenPreferences }: SettingsScreenProps) {
+export default function SettingsScreen({ onOpenPreferences }: SettingsScreenProps) {
   const { profile } = useProfile()
   const [savedSpotAlerts, setSavedSpotAlerts] = useState(false)
 
   return (
     <View style={styles.screen}>
-      <TopBar title="Settings" size="large" onBack={onBack} />
-
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* Starts below the glass header (iOS 26) but scrolls up under it */}
+      <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
         <Text style={styles.section}>Notifications</Text>
         <View style={[styles.card, styles.notifCard]}>
           <View style={styles.toggleRow}>

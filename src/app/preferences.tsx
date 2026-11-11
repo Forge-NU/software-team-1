@@ -1,10 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 
 import { FormMessage } from '@/components/FormMessage';
-import TopBar from '@/components/TopBar';
 import { Button, Screen, Text } from '@/components/ui';
 import { ATMOSPHERE_NOISE_LEVEL, getPreferences, updatePreferences, type Amenity } from '@/lib/profile';
 import { colors } from '@/theme';
@@ -78,27 +77,19 @@ export default function PreferencesScreen() {
     }
   };
 
-  const skip = (
-    <Pressable
-      onPress={done}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel="Skip"
-      className="rounded-pill bg-primaryLight px-sm py-xs active:opacity-80"
-    >
-      <Text variant="label" color="textOnPrimaryLight">
+  // Plain text: on iOS 26 the native header draws the glass bubble around it
+  const skip = () => (
+    <Pressable onPress={done} hitSlop={12} accessibilityRole="button" accessibilityLabel="Skip">
+      <Text variant="bodyStrong" color="primaryDark">
         Skip
       </Text>
     </Pressable>
   );
 
   return (
-    <Screen
-      header={<TopBar title="Study preferences" right={skip} />}
-      scroll
-      padBottom
-      contentClassName="gap-md pb-xl"
-    >
+    // The title comes from the native stack header (app/_layout.tsx)
+    <Screen scroll padBottom contentClassName="gap-md pb-xl">
+      <Stack.Screen options={{ headerRight: skip }} />
       <View className="-mx-gutter gap-xs bg-primaryLight px-gutter py-xl">
         <Text variant="title" accessibilityRole="header">
           What’s your study style?

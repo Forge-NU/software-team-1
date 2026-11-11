@@ -12,7 +12,6 @@ import {
 import { Feather } from '@expo/vector-icons'
 import { CheckIn, getMyCheckIns, MAX_NAME_LENGTH, signOut } from '../lib/profile'
 import { useProfile } from '../context/ProfileContext'
-import TopBar from '../components/TopBar'
 import { colors, layout, radius, spacing, typography } from '../theme'
 
 /**
@@ -232,9 +231,10 @@ export default function ProfileScreen({
 
   return (
     <View style={styles.screen}>
-      <TopBar title="Profile" />
       <FlatList
         style={styles.flex}
+        // Starts below the glass header (iOS 26) but scrolls up under it
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.content}
         data={checkIns}
         keyExtractor={(item) => item.postId}

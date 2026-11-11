@@ -17,7 +17,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { FiltersProvider } from '@/context/FiltersContext';
 import { ProfileProvider } from '@/context/ProfileContext';
 import { useWelcomeSeen } from '@/lib/onboarding';
-import { colors } from '@/theme';
+import { stackScreenOptions } from '@/theme/navigation';
 
 // Keep the splash screen up until the fonts and saved session are ready
 SplashScreen.preventAutoHideAsync();
@@ -58,38 +58,30 @@ function RootNavigator() {
   if (!ready) return null;
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: {
-          backgroundColor: colors.background,
-        },
-      }}
-    >
+    // Pushed screens use the native header, which adds the back button only when there is
+    // somewhere to go back to (not after a deep link). Each tab has its own stack and header
+    // (see app/(tabs)/*/_layout.tsx); auth keeps its TopBar.
+    // A screen adds header buttons with <Stack.Screen options={{ headerRight }} />.
+    <Stack screenOptions={{ ...stackScreenOptions, headerShown: false }}>
       {/* B-13: Authentication links and password reset */}
       {/* Accessible regardless of sign-in status */}
       <Stack.Screen name="auth/callback" />
       <Stack.Screen name="reset-password" />
 
       {/* Screens for signed-in users. Signed-out users see the welcome carousel once (F-8), then sign up */}
-      <Stack.Protected
-        guard={isSignedIn}
-        redirectTo={welcomeSeen ? '/sign-up' : '/welcome'}
-      >
+      <Stack.Protected guard={isSignedIn} redirectTo={welcomeSeen ? '/sign-up' : '/welcome'}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="spot/[id]" />
-        <Stack.Screen name="spot/photos/[id]" />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="preferences" />
-        <Stack.Screen name="filters" />
+        <Stack.Screen name="spot/[id]" options={{ headerShown: true, title: 'Spot detail' }} />
+        <Stack.Screen name="spot/photos/[id]" options={{ headerShown: true, title: 'Recent photos' }} />
+        <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
+        <Stack.Screen name="preferences" options={{ headerShown: true, title: 'Study preferences' }} />
+        <Stack.Screen name="filters" options={{ headerShown: true, title: 'Filters' }} />
+        {/* Full-screen prompt with its own buttons, so no header or swipe-back */}
         <Stack.Screen name="location-permission" options={{ gestureEnabled: false }} />
       </Stack.Protected>
 
       {/* Screens for signed-out users */}
-      <Stack.Protected
-        guard={!isSignedIn}
-        redirectTo="/"
-      >
+      <Stack.Protected guard={!isSignedIn} redirectTo="/">
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
     </Stack>
