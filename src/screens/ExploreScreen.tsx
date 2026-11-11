@@ -1,39 +1,184 @@
-import { View } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { ExploreSpotList } from '@/components/ExploreSpotList';
-import TopBar from '@/components/TopBar';
-import { Screen, Text } from '@/components/ui';
-import { EXPLORE_SORT } from '@/constants/explore';
-import { hasActiveFilters, useExploreSpots } from '@/hooks/useExploreSpots';
-import type { ExploreFilters } from '@/lib/exploreRanking';
+import { colors, spacing, radius, typography, layout } from '../theme';
 
-export interface ExploreScreenProps {
-  onOpenSpot: (locationId: number) => void;
-  /** From the filter sheet once it exists; leave off for the default list */
-  filters?: ExploreFilters;
-  onClearFilters?: () => void;
+import { ExploreSpotList } from '../components/ExploreSpotList';
+import MapViewComponent from '../components/MapView';
+import { EXPLORE_SORT } from '../constants/explore';
+
+import { getUnsupportedLabels, useFilters } from '../context/FiltersContext';
+import { hasActiveFilters, useExploreSpots } from '../hooks/useExploreSpots';
+import { toExploreFilters } from '../lib/filterAdapter';
+import { NU_CAMPUS } from '../lib/exploreSource';
+
+type ExploreScreenProps = {
+    onOpenFilters?: () => void;
+    onOpenSpot: (locationId: number) => void;
+    latitude?: number;
+    longitude?: number;
+};
+
+/** Height of the map on the Explore screen, from the Figma */
+const MAP_HEIGHT = 220;
+
+export default function ExploreScreen({
+    onOpenFilters,
+    onOpenSpot,
+    latitude = NU_CAMPUS.latitude,
+    longitude = NU_CAMPUS.longitude,
+}: ExploreScreenProps) {
+    // Shared filters: the same ones the Filters screen edits
+    const { filters, activeChips, removeChip, clearAll } = useFilters();
+    const exploreFilters = toExploreFilters(filters);
+    const unsupported = getUnsupportedLabels(filters);
+
+    // One fetch for the whole screen: the map and the list both render these `spots`.
+    // Refetches when filters change (including chip removal).
+    const { spots, loading, error, refresh } = useExploreSpots({
+        filters: exploreFilters,
+        sort: EXPLORE_SORT,
+        latitude,
+        longitude,
+    });
+
+    return (
+        <SafeAreaView style={styles.container}>
+
+            {/* Header */}
+            <View style={styles.header}>
+                <Text style={styles.logo}>Spotted</Text>
+            </View>
+
+            {/* Map of the spots matching the current filters */}
+            <View style={styles.mapArea}>
+                <MapViewComponent
+                    height={MAP_HEIGHT}
+                    locations={spots}
+                    onLocationPress={(spot) => onOpenSpot(spot.location_id)}
+                />
+            </View>
+
+            {/* Filters button and active filter chips */}
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.chipRow}
+                contentContainerStyle={styles.chipRowContent}
+            >
+                <TouchableOpacity
+                    style={styles.filtersButton}
+                    onPress={onOpenFilters}
+                    accessibilityRole="button"
+                >
+                    <Text style={styles.filtersButtonText}>
+                        Filters{activeChips.length > 0 ? ` (${activeChips.length})` : ''}
+                    </Text>
+                </TouchableOpacity>
+
+                {activeChips.map((chip) => (
+                    <TouchableOpacity
+                        key={chip.key}
+                        style={styles.activeChip}
+                        onPress={() => removeChip(chip.key)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${chip.label} filter`}
+                    >
+                        <Text style={styles.activeChipText}>✓ {chip.label} ×</Text>
+                    </TouchableOpacity>
+                ))}
+
+                {activeChips.length > 1 && (
+                    <TouchableOpacity
+                        style={styles.clearButton}
+                        onPress={clearAll}
+                        accessibilityRole="button"
+                    >
+                        <Text style={styles.clearButtonText}>Clear all</Text>
+                    </TouchableOpacity>
+                )}
+            </ScrollView>
+
+            {/* Filters B-5 can't apply yet */}
+            {unsupported.length > 0 && (
+                <Text style={styles.notice}>
+                    Not applied yet: {unsupported.join(', ')}
+                </Text>
+            )}
+
+            {/* Results (F-3): ranked SpotCards, with loading, error and empty states */}
+            <ScrollView contentContainerStyle={styles.list}>
+                <ExploreSpotList
+                    spots={spots}
+                    loading={loading}
+                    error={error}
+                    // Only filters B-5 actually applies; unsupported ones don't narrow the list
+                    filtered={hasActiveFilters(exploreFilters)}
+                    onOpenSpot={onOpenSpot}
+                    onRetry={refresh}
+                    onClearFilters={clearAll}
+                />
+            </ScrollView>
+        </SafeAreaView>
+    );
 }
 
-export default function ExploreScreen({ onOpenSpot, filters, onClearFilters }: ExploreScreenProps) {
-  // One fetch for the whole screen: the map and the list both render these `spots`
-  const { spots, loading, error, refresh } = useExploreSpots({ filters, sort: EXPLORE_SORT });
+// Styles using Spotted's shared theme
+const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
 
-  return (
-    <Screen header={<TopBar title="Explore" />} scroll contentClassName="gap-lg py-xl">
-      {/* TODO(F-2): replace with the map, passing it the same `spots` and `onOpenSpot` */}
-      <View className="h-48 items-center justify-center rounded-xl border border-border bg-primaryLight">
-        <Text color="textSecondary">Waiting on Map in F-2</Text>
-      </View>
+    header: {
+        height: layout.headerHeight,
+        backgroundColor: colors.surface,
+        justifyContent: 'center',
+        paddingHorizontal: layout.screenPaddingHorizontal,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+    },
+    logo: { ...typography.bodyStrong, color: colors.primary },
 
-      <ExploreSpotList
-        spots={spots}
-        loading={loading}
-        error={error}
-        filtered={hasActiveFilters(filters)}
-        onOpenSpot={onOpenSpot}
-        onRetry={refresh}
-        onClearFilters={onClearFilters}
-      />
-    </Screen>
-  );
-}
+    mapArea: {
+        paddingHorizontal: layout.screenPaddingHorizontal,
+        paddingTop: spacing.md,
+    },
+
+    chipRow: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
+    chipRowContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        paddingHorizontal: layout.screenPaddingHorizontal,
+        paddingVertical: spacing.sm,
+    },
+
+    filtersButton: {
+        borderRadius: radius.pill,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.xs,
+    },
+    filtersButtonText: { ...typography.captionStrong, color: colors.textPrimary },
+
+    activeChip: {
+        borderRadius: radius.pill,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xs,
+        backgroundColor: colors.primaryLight,
+        borderWidth: 1,
+        borderColor: colors.primary,
+    },
+    activeChipText: { ...typography.tag, color: colors.textOnPrimaryLight },
+
+    clearButton: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+    clearButtonText: { ...typography.captionStrong, color: colors.primaryDark },
+
+    notice: {
+        ...typography.caption,
+        color: colors.textSecondary,
+        paddingHorizontal: layout.screenPaddingHorizontal,
+        paddingTop: spacing.sm,
+    },
+
+    list: { padding: layout.screenPaddingHorizontal, flexGrow: 1 },
+});

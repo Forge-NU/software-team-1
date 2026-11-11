@@ -1,9 +1,11 @@
-import type { ComponentProps } from 'react';
+import { useEffect, type ComponentProps } from 'react';
 import { View } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { shouldShowLocationPrompt } from '@/lib/locationPermisson';
+import { takePreferencesPending } from '@/lib/onboarding';
 import { colors, typography } from '@/theme';
 
 type IconName = ComponentProps<typeof Feather>['name'];
@@ -35,6 +37,16 @@ function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
 
 export default function TabLayout() {
   const { bottom } = useSafeAreaInsets();
+  const router = useRouter();
+
+  // After sign up, Figma's order is the location prompt, then Study preferences (F-8).
+  // Preferences is pushed first so it sits underneath: closing the location screen reveals it.
+  useEffect(() => {
+    Promise.all([takePreferencesPending(), shouldShowLocationPrompt()]).then(([preferences, location]) => {
+      if (preferences) router.push('/preferences');
+      if (location) router.push('/location-permission');
+    });
+  }, [router]);
 
   return (
     <Tabs

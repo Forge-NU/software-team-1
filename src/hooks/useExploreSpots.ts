@@ -2,18 +2,25 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { DEFAULT_EXPLORE_ORIGIN, EXPLORE_RADIUS_METERS } from '@/constants/explore';
 import type { ExploreFilters, ExploreSpot } from '@/lib/exploreRanking';
-import { getMockExploreSpots } from '@/mocks';
+import { getExploreSpots } from '@/lib/exploreSource';
 
 export interface UseExploreSpotsOptions {
   filters?: ExploreFilters;
   sort?: 'best' | 'distance';
+  latitude?: number;
+  longitude?: number;
 }
 
 /**
  * The spots Explore shows. Call this once in the Explore screen and pass `spots` to both
  * the list (F-3) and the map (F-2), so the two always show the same spots.
  */
-export function useExploreSpots({ filters, sort = 'distance' }: UseExploreSpotsOptions = {}) {
+export function useExploreSpots({
+  filters,
+  sort = 'distance',
+  latitude = DEFAULT_EXPLORE_ORIGIN.latitude,
+  longitude = DEFAULT_EXPLORE_ORIGIN.longitude,
+}: UseExploreSpotsOptions = {}) {
   const [spots, setSpots] = useState<ExploreSpot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,13 +34,14 @@ export function useExploreSpots({ filters, sort = 'distance' }: UseExploreSpotsO
     setLoading(true);
     try {
       const params = {
-        ...DEFAULT_EXPLORE_ORIGIN,
+        latitude,
+        longitude,
         radiusMeters: EXPLORE_RADIUS_METERS,
         filters: JSON.parse(filtersKey) as ExploreFilters,
         sort,
       };
-      // TODO(F-7, #37): replace with `await exploreSpots(params)` from '@/lib/explore'
-      const result = getMockExploreSpots(params);
+      // Mock or live data, switched in one place by USE_MOCK_DATA in exploreSource
+      const result = await getExploreSpots(params);
       if (id !== requestId.current) return;
       setSpots(result);
       setError(null);
@@ -43,7 +51,7 @@ export function useExploreSpots({ filters, sort = 'distance' }: UseExploreSpotsO
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, [filtersKey, sort]);
+  }, [filtersKey, sort, latitude, longitude]);
 
   useEffect(() => {
     load();

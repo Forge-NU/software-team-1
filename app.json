@@ -26,7 +26,12 @@
       "expo-router",
       "expo-font",
       "expo-splash-screen",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-localization",
+      [
+        "expo-location",
+        { "locationWhenInUsePermission": "Spotted uses your location to show study spots near you" }
+      ]
     ]
   }
 }
