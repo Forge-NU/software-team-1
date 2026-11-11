@@ -1,5 +1,8 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as ExpoLocation from 'expo-location'
 import { Linking } from 'react-native'
+
+const LOCATION_PROMPT_SEEN_KEY = 'spotted.locationPromptSeen'
 
 /**
  * The type of location permission that the user has granted to the app. This can be one of the following:
@@ -20,7 +23,7 @@ export type LocationPermission = 'precise' | 'approximate' | 'denied' | 'blocked
 function toLocationPermission(status: ExpoLocation.LocationPermissionResponse): LocationPermission {
     if (status.granted) {
         const aproximate = status.ios?.accuracy === 'reduced' || status.android?.accuracy === 'coarse'
-        return aproximate ? 'precise' : 'approximate'
+        return aproximate ? 'approximate' : 'precise'
     }
     // NOTE: Android, a user can be asked up to 2 times before blocked, iOS is only once
     return status.canAskAgain ? 'denied' : 'blocked'
@@ -51,4 +54,20 @@ export async function requestLocationPermission(): Promise<LocationPermission> {
  */
 export function openAppSettings(): Promise<void> {
   return Linking.openSettings()
+}
+
+/**
+ * Whether to show the location permission screen: the OS can still ask, and the user hasn't answered it on this device
+ */
+export async function shouldShowLocationPrompt(): Promise<boolean> {
+  if ((await getLocationPermission()) !== 'denied') return false
+  const seen = await AsyncStorage.getItem(LOCATION_PROMPT_SEEN_KEY).catch(() => null)
+  return seen === null
+}
+
+/**
+ * Remembers that the user answered the location permission screen, so it isn't shown again
+ */
+export async function markLocationPromptSeen(): Promise<void> {
+  await AsyncStorage.setItem(LOCATION_PROMPT_SEEN_KEY, 'true').catch(() => {})
 }

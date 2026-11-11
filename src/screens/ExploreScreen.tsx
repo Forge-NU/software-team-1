@@ -13,6 +13,9 @@ import {
 } from 'react-native';
 
 import { colors, spacing, radius, typography, layout } from '../theme';
+
+import MapViewComponent from '../components/MapView';
+
 import { getUnsupportedLabels, useFilters } from '../context/FiltersContext';
 import { toExploreFilters } from '../lib/filterAdapter';
 import { getExploreSpots, NU_CAMPUS } from '../lib/exploreSource';
@@ -25,6 +28,9 @@ type ExploreScreenProps = {
     latitude?: number;
     longitude?: number;
 };
+
+/** Height of the map on the Explore screen, from the Figma */
+const MAP_HEIGHT = 220;
 
 // Readable names for database location types
 const typeLabels: Record<string, string> = {
@@ -220,6 +226,13 @@ export default function ExploreScreen({
                 <Text style={styles.mapPlaceholderText}>
                     Map
                 </Text>
+            {/* Map of the spots matching the current filters */}
+            <View style={styles.mapArea}>
+                <MapViewComponent
+                    height={MAP_HEIGHT}
+                    locations={spots}
+                    onLocationPress={(spot) => onOpenSpot?.(spot.location_id)}
+                />
             </View>
 
             {/* Filters button and active filter chips */}
@@ -338,11 +351,9 @@ const styles = StyleSheet.create({
         color: colors.textSecondary,
     },
 
-    mapPlaceholder: {
-        height: 220,
-        backgroundColor: colors.primaryLight,
-        alignItems: 'center',
-        justifyContent: 'center',
+    mapArea: {
+        paddingHorizontal: layout.screenPaddingHorizontal,
+        paddingTop: spacing.md,
     },
 
     mapPlaceholderText: {
