@@ -5,7 +5,7 @@ import { mockExploreRows } from './mocks/exploreMocks'
  * true: Explore uses mock spots from src/lib/mocks/explore.ts.
  * Set to false once real locations and posts are in the database.
  */
-export const USE_MOCK_DATA = true
+export const USE_MOCK_DATA = false
 
 /** Default map center until location permission (Logan's branch) is wired in. */
 export const NU_CAMPUS = { latitude: 42.3398, longitude: -71.0892 }

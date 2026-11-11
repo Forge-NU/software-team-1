@@ -13,7 +13,7 @@ import {
 } from './checkIn'
 
 // Keep mock search enabled until real Supabase search is tested.
-export const USE_MOCK_SEARCH = true
+export const USE_MOCK_SEARCH = false
 
 const SEARCH_LIMIT = 50
 const WALKING_METERS_PER_MINUTE = 80
