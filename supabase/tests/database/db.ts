@@ -3,8 +3,9 @@
 // roles (plus service_role), auth.users, auth.uid(), storage.buckets/objects, the extensions
 // schema and the default grants Supabase gives those roles.
 
-import { PGlite } from 'npm:@electric-sql/pglite@0.5.8'
 import { postgis } from 'npm:@electric-sql/pglite-postgis@0.2.8'
+import { PGlite } from 'npm:@electric-sql/pglite@0.5.8'
+import { pg_trgm } from 'npm:@electric-sql/pglite@0.5.8/contrib/pg_trgm'
 
 export const ADMIN = '00000000-0000-0000-0000-00000000000a'
 export const STUDENT = '00000000-0000-0000-0000-00000000000b'
@@ -14,6 +15,7 @@ const SUPABASE_STUBS = `
   create role anon nologin;
   create role authenticated nologin;
   create role service_role nologin bypassrls;
+  create role supabase_auth_admin nologin;
   create schema auth;
   create schema extensions;
   grant usage on schema extensions to anon, authenticated;
@@ -62,7 +64,7 @@ const SUPABASE_STUBS = `
 `
 
 async function createDatabase(): Promise<PGlite> {
-  const pg = new PGlite({ extensions: { postgis } })
+  const pg = new PGlite({ extensions: { postgis, pg_trgm } })
   await pg.exec(SUPABASE_STUBS)
   const dir = new URL('../../migrations/', import.meta.url)
   const files = [...Deno.readDirSync(dir)].map((e) => e.name).filter((n) => n.endsWith('.sql')).sort()
