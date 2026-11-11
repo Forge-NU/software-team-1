@@ -37,11 +37,3 @@ export const TABS = [
   feather: FeatherName;
 }[];
 
-/**
- * Title of the tab with this route name, e.g. "(explore)" → "Explore".
- * The root stack uses it to name the (tabs) screen after the open tab, so a pushed
- * screen's back button menu (long press) says "Profile" instead of "(tabs)".
- */
-export function tabTitle(routeName: string | undefined): string {
-  return TABS.find((tab) => tab.name === routeName)?.title ?? TABS[0].title;
-}

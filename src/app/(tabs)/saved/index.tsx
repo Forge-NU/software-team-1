@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 
+import { spotHref } from '@/navigation/SpotRoutes';
 import SavedScreen from '@/screens/SavedScreen';
 
 export default function SavedRoute() {
@@ -7,7 +8,7 @@ export default function SavedRoute() {
 
   return (
     <SavedScreen
-      onOpenSpot={(id) => router.push({ pathname: '/spot/[id]', params: { id: String(id) } })}
+      onOpenSpot={(id) => router.push(spotHref('/saved', id))}
       onFindSpots={() => router.navigate('/')}
     />
   );
