@@ -61,6 +61,7 @@ function RootNavigator() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="preferences" />
         <Stack.Screen name="filters" />
+        <Stack.Screen name="location-permission" options={{ gestureEnabled: false }} />
       </Stack.Protected>
       <Stack.Protected guard={!isSignedIn} redirectTo="/">
         <Stack.Screen name="(auth)" />
