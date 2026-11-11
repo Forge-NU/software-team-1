@@ -5,14 +5,15 @@ import SpotMarker from '@/components/SpotMarker';
 import { isLocationGranted, useLocationPermission } from '@/hooks/useLocationPermission';
 import { colors } from '@/theme/colors';
 import type { Location } from '@/types/location';
+import { NU_CAMPUS } from '@/lib/exploreSource';
 
 /** The location fields the map needs, so both Location rows and Explore results can be shown */
 export type MapSpot = Pick<Location, 'location_id' | 'name' | 'latitude' | 'longitude'>;
 
 /** Shown until the user's location is known, or if they haven't granted location access */
 const DEFAULT_REGION: Region = {
-    latitude: 42.3398,
-    longitude: -71.0892,
+    latitude: NU_CAMPUS.latitude,
+    longitude: NU_CAMPUS.longitude,
     latitudeDelta: 0.03,
     longitudeDelta: 0.03,
 };
