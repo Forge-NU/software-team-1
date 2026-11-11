@@ -16,6 +16,7 @@ import {
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { FiltersProvider } from '@/context/FiltersContext';
 import { ProfileProvider } from '@/context/ProfileContext';
+import { useWelcomeSeen } from '@/lib/onboarding';
 import { colors } from '@/theme';
 
 // Keep the splash screen up until the fonts and saved session are ready
@@ -36,6 +37,7 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { isSignedIn, isLoading } = useAuth();
+  const welcomeSeen = useWelcomeSeen();
 
   const [fontsLoaded, fontError] = useFonts({
     Afacad_400Regular,
@@ -45,7 +47,7 @@ function RootNavigator() {
   });
 
   const ready =
-    !isLoading && (fontsLoaded || fontError !== null);
+    !isLoading && welcomeSeen !== null && (fontsLoaded || fontError !== null);
 
   useEffect(() => {
     if (ready) {
@@ -69,10 +71,10 @@ function RootNavigator() {
       <Stack.Screen name="auth/callback" />
       <Stack.Screen name="reset-password" />
 
-      {/* Screens for signed-in users */}
+      {/* Screens for signed-in users. Signed-out users see the welcome carousel once (F-8), then sign up */}
       <Stack.Protected
         guard={isSignedIn}
-        redirectTo="/sign-up"
+        redirectTo={welcomeSeen ? '/sign-up' : '/welcome'}
       >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="spot/[id]" />
