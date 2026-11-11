@@ -1,5 +1,13 @@
-import { PlaceholderScreen } from '@/components/PlaceholderScreen';
+import { useRouter } from 'expo-router';
+
+import FeedScreen from '@/screens/FeedScreen';
 
 export default function FeedRoute() {
-  return <PlaceholderScreen title="Feed" ticket="F-10" />;
+  const router = useRouter();
+
+  return (
+    <FeedScreen
+      onOpenSpot={(locationId) => router.push({ pathname: '/spot/[id]', params: { id: String(locationId) } })}
+    />
+  );
 }
