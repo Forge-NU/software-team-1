@@ -29,6 +29,10 @@ supabase/
 | `20261018120000_openstreetmap.sql` | `osm_type`/`osm_id` on `location`, and `upsert_osm_places(jsonb)`, used by the OpenStreetMap import script to save locations, addresses and hours in one transaction |
 | `20261018130000_drop_google_places.sql` | Drops `upsert_google_place`. `google_place_id` is kept for locations imported before the switch |
 | `20261101120000_area_amenities.sql` | The `phone_policy` lookup table, and optional `phone_policy_id`, `time_limit_minutes` and `wheelchair_accessible` on `area`. Null means unknown or not applicable |
+| `20261103120000_saved_spots.sql` | `saved_spot`: a user's bookmarked locations, readable and writable only by that user |
+| `20261104120000_study_preferences.sql` | `user_preferences`: noise and amenity preferences and the saved-spot notification setting, visible only to their owner |
+| `20261110010000_abuse_controls.sql` | Post rate limits in `create_post`, `flag.post_id` + one-report-per-target, and `open_flags` for admins (no auto-hide) |
+| `20261111010000_backend_settings.sql` | `backend_settings` key/value table; `create_post` reads spot cooldown (10m) and hourly cap (100) from it |
 
 ### Why the filenames look like that
 
@@ -48,6 +52,22 @@ Once a migration has been pushed to the hosted project, never edit it. The CLI w
 npx supabase migration new add_something    # creates migrations/<timestamp>_add_something.sql
 npx supabase db reset                       # rebuild the local database from all migrations
 npx supabase db push                        # apply new migrations to the hosted project
+```
+
+Then regenerate the types (below) and commit them with the migration.
+
+### Users
+
+`public.users` is the only identity table. `handle_new_user()` creates one row per sign-up, with `name` taken from the sign-up metadata's `name` key (falling back to the part of the email before the @). Every other table that belongs to a user references `public.users`, and author names come from `users.name`.
+
+### Generated types
+
+`database.types.ts` (repo root) is generated from the `public` schema. Don't edit it by hand:
+
+```bash
+npx supabase gen types typescript --schema public > database.types.ts            # local database
+npx supabase gen types typescript --remote --schema public > database.types.ts   # or the linked hosted project
+npx oxfmt database.types.ts                                                       # the CLI's output is unformatted
 ```
 
 ### Posts
@@ -118,6 +138,9 @@ npm run test:backend
 | `tests/delete-account/handler_test.ts` | `delete-account` Edge Function: JWT-only identity, storage prefix cleanup in both photo buckets, auth user delete (including already-gone retries), and rejecting unauthenticated callers |
 | `tests/osm/overpass_test.ts` | Converting OSM tags (location type, address, opening hours) and the Overpass queries, retries and campus matching, with the server faked |
 | `tests/lib/places_test.ts` | `getNearbyLocations` in `src/lib/places.ts`, with PostgREST faked by running `nearby_locations` in the in-memory database: paging with `nextCursor`, filters, and pageSize/cursor validation |
+| `tests/lib/auth_test.ts` | `signUp` sends the display name under the metadata key `handle_new_user` reads |
+
+`tests/database/users.test.sql` is a [pgTAP](https://pgtap.org) test for sign-up and `users` RLS. It runs against the local Supabase stack with `npx supabase test db`.
 
 `tests/database/db.ts` stands in for the parts of Supabase the migrations rely on (`auth.users`, `auth.uid()`, the `anon` and `authenticated` roles, `storage`, and the `extensions` schema) and loads PGlite's PostGIS extension. Each test runs inside a transaction that is rolled back afterward, so tests don't affect each other. Use `seed(db)` for a starting admin, two students, and a location with an area and seat, and `db.as(userId)` to run a query as that user (`null` for signed out).
 

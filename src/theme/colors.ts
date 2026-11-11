@@ -13,6 +13,12 @@ const palette = {
     gray500: '#6B7280',
     gray900: '#111827',
     red600: '#DC2626',
+    green100: '#DCFCE7',
+    green700: '#15803D',
+    amber100: '#FEF3C7',
+    amber700: '#B45309',
+    red100: '#FEE2E2',
+    red700: '#B91C1C',
     white: '#FFFFFF',
     black: '#000000',
 } as const;
@@ -47,6 +53,16 @@ export const colors = {
     textOnPrimary: palette.white,
     danger: palette.red600,
     shadow: palette.black,
+    /**
+     * Crowdedness (Empty/Quiet, Moderate, Busy/Packed). The base color is for text, icons
+     * and dots; `...Surface` is the pill behind it. Always pair with a label or icon.
+     */
+    crowdLow: palette.green700,
+    crowdLowSurface: palette.green100,
+    crowdModerate: palette.amber700,
+    crowdModerateSurface: palette.amber100,
+    crowdHigh: palette.red700,
+    crowdHighSurface: palette.red100,
 } as const;
 
 export type ColorName = keyof typeof colors;
