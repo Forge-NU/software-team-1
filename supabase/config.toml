@@ -157,8 +157,12 @@ enabled = true
 # in emails.
 site_url = "spotted:///auth/callback"
 
+# exp://** is Expo Go (src/lib/authRedirect.ts). The hosted project needs the same list,
+# set in the dashboard under Auth > URL Configuration; this file only applies locally.
 additional_redirect_urls = [
-  "spotted:///auth/callback"
+  "spotted:///auth/callback",
+  "spotted://**",
+  "exp://**"
 ]
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""

@@ -1,6 +1,6 @@
 
 import { supabase } from './supabase';
-import { AUTH_CALLBACK_URL } from './authLinks';
+import { authCallbackUrl } from './authRedirect';
 
 // Create a new account
 export async function signUp(
@@ -20,7 +20,7 @@ export async function signUp(
       },
 
       // Confirmation emails redirect into Spotted
-      emailRedirectTo: AUTH_CALLBACK_URL,
+      emailRedirectTo: authCallbackUrl(),
     },
   });
 }
@@ -48,7 +48,7 @@ export async function requestPasswordReset(
   return await supabase.auth.resetPasswordForEmail(
     email.trim(),
     {
-      redirectTo: AUTH_CALLBACK_URL,
+      redirectTo: authCallbackUrl(),
     }
   );
 }

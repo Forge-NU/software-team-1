@@ -1,8 +1,6 @@
 
 import { supabase } from './supabase';
 
-export const AUTH_CALLBACK_URL = 'spotted:///auth/callback';
-
 type AuthLinkResult = {
   error: string | null;
   recovery: boolean;
