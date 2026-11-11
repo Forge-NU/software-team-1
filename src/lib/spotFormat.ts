@@ -1,5 +1,7 @@
 // Display helpers for spot cards, map callouts and spot detail. Pure, no React.
 
+import { RECENT_MINUTES } from './exploreRanking'
+
 const METERS_PER_MILE = 1609.344
 
 /** "0.3 mi". With `long`, "0.3 miles" for screen readers. */
@@ -21,11 +23,29 @@ export function formatTimeAgo(iso: string, now = Date.now(), long = false): stri
   return days === 1 ? 'yesterday' : `${days} days ago`
 }
 
+/** True while a post's crowd and noise still count as current (RECENT_MINUTES, same window as rankSpots). */
+export function isRecent(iso: string | null, now = Date.now(), recentMinutes = RECENT_MINUTES): boolean {
+  if (!iso) return false
+  return now - Date.parse(iso) < recentMinutes * 60_000
+}
+
 export type CrowdTone = 'low' | 'moderate' | 'high'
+
+/** Crowd wording from the Figma check-in chips. Noise keeps its own labels, so the two never share a word. */
+export const CROWD_TONE_LABELS: Record<CrowdTone, string> = {
+  low: 'Nearly empty',
+  moderate: 'Some seats',
+  high: 'Busy',
+}
 
 /** Empty/Quiet are low, Moderate is moderate, Busy/Packed are high (same groups as PostReview in posts.ts). */
 export function crowdTone(crowdLevelId: number): CrowdTone {
   if (crowdLevelId <= 2) return 'low'
   if (crowdLevelId === 3) return 'moderate'
   return 'high'
+}
+
+/** "Nearly empty", "Some seats" or "Busy" for a crowd_level_id. */
+export function crowdLabel(crowdLevelId: number): string {
+  return CROWD_TONE_LABELS[crowdTone(crowdLevelId)]
 }

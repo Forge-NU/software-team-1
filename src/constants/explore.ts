@@ -10,7 +10,7 @@ export const DEFAULT_EXPLORE_ORIGIN = { latitude: 42.3398, longitude: -71.0892 }
 export const EXPLORE_RADIUS_METERS = 2000;
 
 /**
- * Nearest first for now. Flip to 'best' once B-5's "best options" ranking is signed off;
- * rankSpots() already supports it, so nothing else changes.
+ * B-5's "best options" ranking (#25), to match the "Best options right now" header.
+ * 'distance' is nearest first; rankSpots() supports both.
  */
-export const EXPLORE_SORT: 'best' | 'distance' = 'distance';
+export const EXPLORE_SORT: 'best' | 'distance' = 'best';

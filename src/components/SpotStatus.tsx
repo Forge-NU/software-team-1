@@ -3,8 +3,8 @@ import { View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 import { Text } from '@/components/ui';
-import { CROWD_LEVELS, NOISE_LEVELS, type CrowdLevelId, type NoiseLevelId } from '@/constants/lookups';
-import { crowdTone, type CrowdTone } from '@/lib/spotFormat';
+import { NOISE_LEVELS, type NoiseLevelId } from '@/constants/lookups';
+import { crowdLabel, crowdTone, type CrowdTone } from '@/lib/spotFormat';
 import { colors, type ColorName } from '@/theme';
 
 type IconName = ComponentProps<typeof Feather>['name'];
@@ -30,10 +30,14 @@ interface LevelProps {
   label?: string | null;
 }
 
-/** Crowdedness pill. Color, icon and label together, so it never relies on color alone. */
-export function CrowdBadge({ levelId, label }: LevelProps) {
+/**
+ * Crowdedness pill. Color, icon and label together, so it never relies on color alone.
+ * Uses the Figma wording ("Nearly empty", "Some seats", "Busy") rather than the lookup label,
+ * so it can't repeat a noise word like "Quiet".
+ */
+export function CrowdBadge({ levelId }: { levelId: number }) {
   const tone = CROWD_TONES[crowdTone(levelId)];
-  const text = label ?? CROWD_LEVELS[levelId as CrowdLevelId] ?? 'Unknown';
+  const text = crowdLabel(levelId);
 
   return (
     <View className={`flex-row items-center gap-xxs rounded-pill px-xs py-xxs ${tone.surface}`}>
