@@ -25,7 +25,8 @@ interface SpotDetailScreenProps {
   locationId: number;
   onBack: () => void;
   onSeeAllPhotos: (locationId: number) => void;
-  onCheckIn: (locationId: number) => void;
+  /** Gets the spot's name too, so the check-in can show it without loading the spot again. */
+  onCheckIn: (locationId: number, name: string) => void;
   onGetDirections: (location: Location) => void;
   walkMinutes?: number;
 }
@@ -142,7 +143,7 @@ export default function SpotDetailScreen({
         ]}
       >
         <Pressable
-          onPress={() => onCheckIn(locationId)}
+          onPress={() => onCheckIn(locationId, location.name)}
           style={styles.checkInButton}
         >
           <Text style={styles.checkInText}>

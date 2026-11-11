@@ -17,8 +17,10 @@ export default function SpotRoute() {
       onSeeAllPhotos={() =>
         router.push({ pathname: '/spot/photos/[id]', params: { id: String(locationId) } })
       }
-      // F-6 reads locationId to pre-select this spot
-      onCheckIn={() => router.navigate({ pathname: '/check-in', params: { locationId: String(locationId) } })}
+      // Check in skips search and starts at this spot, showing its name
+      onCheckIn={(_, name) =>
+        router.navigate({ pathname: '/check-in', params: { locationId: String(locationId), name } })
+      }
       onGetDirections={(location) => openDirections(location.latitude, location.longitude)}
     />
   );
