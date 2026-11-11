@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -53,7 +53,11 @@ export default function ProfileScreen({
 }: ProfileScreenProps) {
   const { profile, loading: profileLoading, refresh: refreshProfile, setDisplayName } = useProfile()
   const [checkIns, setCheckIns] = useState<CheckIn[]>([])
-  const [loading, setLoading] = useState(true)
+  // `loaded` drives the first-load spinner; the ref lets `load` read it without changing identity
+  const [loaded, setLoaded] = useState(false)
+  const hasLoaded = useRef(false)
+  // Only for pull-to-refresh. Focus refreshes run quietly behind the last loaded list.
+  const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [editing, setEditing] = useState(false)
@@ -61,18 +65,34 @@ export default function ProfileScreen({
   const [saving, setSaving] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    if (!profile) return
-    setLoading(true)
-    try {
-      setCheckIns(await getMyCheckIns(profile.userId))
-      setLoadError(null)
-    } catch {
-      setLoadError("Couldn't load your updates. Pull down to try again.")
-    } finally {
-      setLoading(false)
-    }
+  // A different account must never see the previous one's updates
+  useEffect(() => {
+    setCheckIns([])
+    hasLoaded.current = false
+    setLoaded(false)
+    setLoadError(null)
   }, [profile?.userId])
+
+  const load = useCallback(
+    async ({ showSpinner = false }: { showSpinner?: boolean } = {}) => {
+      if (!profile) return
+      if (showSpinner) setRefreshing(true)
+      try {
+        setCheckIns(await getMyCheckIns(profile.userId))
+        setLoadError(null)
+      } catch {
+        // A quiet refresh keeps the old list; only say so if nothing is shown or the user asked
+        if (!hasLoaded.current || showSpinner) {
+          setLoadError("Couldn't load your updates. Pull down to try again.")
+        }
+      } finally {
+        hasLoaded.current = true
+        setLoaded(true)
+        setRefreshing(false)
+      }
+    },
+    [profile?.userId],
+  )
 
   // Reload whenever the tab regains focus
   useFocusEffect(
@@ -205,7 +225,7 @@ export default function ProfileScreen({
     </View>
   )
 
-  const empty = loading ? (
+  const empty = !loaded ? (
     <ActivityIndicator style={styles.spinner} color={colors.primaryDark} />
   ) : loadError ? null : (
     <View style={[styles.card, styles.empty]}>
@@ -246,8 +266,8 @@ export default function ProfileScreen({
         ListHeaderComponent={header}
         ListEmptyComponent={empty ?? undefined}
         ListFooterComponent={footer}
-        refreshing={loading && count > 0}
-        onRefresh={load}
+        refreshing={refreshing}
+        onRefresh={() => load({ showSpinner: true })}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => (
           <Pressable
