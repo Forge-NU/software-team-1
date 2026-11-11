@@ -221,11 +221,6 @@ export default function ExploreScreen({
                 </Text>
             </TouchableOpacity>
 
-            {/* Map area: F-2 replaces this with the map */}
-            <View style={styles.mapPlaceholder}>
-                <Text style={styles.mapPlaceholderText}>
-                    Map
-                </Text>
             {/* Map of the spots matching the current filters */}
             <View style={styles.mapArea}>
                 <MapViewComponent
@@ -234,7 +229,6 @@ export default function ExploreScreen({
                     onLocationPress={(spot) => onOpenSpot?.(spot.location_id)}
                 />
             </View>
-
             {/* Filters button and active filter chips */}
             <ScrollView
                 horizontal
