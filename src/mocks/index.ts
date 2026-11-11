@@ -8,6 +8,7 @@ import { mockPosts } from './posts';
 
 export { mockLocations } from './locations';
 export { mockPosts } from './posts';
+export { getMockExploreSpots, type MockExploreParams } from './explore';
 
 export function getMockLocation(locationId: number) {
   return mockLocations.find((location) => location.location_id === locationId) ?? null;

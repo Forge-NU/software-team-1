@@ -6,7 +6,8 @@ import { Feather } from '@expo/vector-icons';
 import { FormMessage } from '@/components/FormMessage';
 import TopBar from '@/components/TopBar';
 import { Button, Screen, Text } from '@/components/ui';
-import { ATMOSPHERE_NOISE_LEVEL, getPreferences, updatePreferences, type Amenity } from '@/lib/profile';
+import { ATMOSPHERE_NOISE_LEVEL, type AmenityId as Amenity } from '@/constants/lookups';
+import { getPreferences, updatePreferences } from '@/lib/profile';
 import { colors } from '@/theme';
 
 type Atmosphere = keyof typeof ATMOSPHERE_NOISE_LEVEL;
