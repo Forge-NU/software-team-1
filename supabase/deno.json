@@ -2,7 +2,8 @@
   "nodeModulesDir": "none",
   "lock": false,
   "imports": {
-    "../src/lib/supabase": "./tests/lib/supabase.ts"
+    "../src/lib/supabase": "./tests/lib/supabase.ts",
+    "../src/lib/authLinks": "../src/lib/authLinks.ts"
   },
   "tasks": {
     "test": "deno test --allow-read --allow-env tests"

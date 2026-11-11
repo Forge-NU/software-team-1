@@ -40,6 +40,21 @@ Deno.test('users', async (t) => {
       ])
     }))
 
+  await t.step('users is the only identity table, and sign-up creates exactly one row', () =>
+    withDb(async (db) => {
+      await db.query(
+        `insert into auth.users (id, email, raw_user_meta_data) values ($1, 'new@northeastern.edu', '{"name": "Nia New"}')`,
+        [STUDENT],
+      )
+      assertEquals(await db.query('select user_id, name from public.users'), [{ user_id: STUDENT, name: 'Nia New' }])
+      // Everything else points at public.users, and the old B-2 profiles table is gone.
+      const linkedToAuth = await db.query<{ t: string }>(
+        `select conrelid::regclass::text as t from pg_constraint where contype = 'f' and confrelid = 'auth.users'::regclass`,
+      )
+      assertEquals(linkedToAuth, [{ t: 'users' }])
+      assertEquals(await db.query(`select to_regclass('public.profiles') as t`), [{ t: null }])
+    }))
+
   await t.step('user_type only allows student or admin', () =>
     withDb(async (db) => {
       await seed(db)
