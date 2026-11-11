@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, spacing, radius, typography, layout } from '../theme';
 
@@ -65,6 +65,8 @@ export default function ExploreScreen({
 }: ExploreScreenProps) {
     // Shared filters: the same ones the Filters screen edits
     const { filters, activeChips, removeChip, clearAll } = useFilters();
+    // Top inset only: the list runs under the native tab bar and insets itself
+    const { top } = useSafeAreaInsets();
 
     const [spots, setSpots] = useState<ExploreSpot[]>([]);
     const [loading, setLoading] = useState(true);
@@ -165,7 +167,7 @@ export default function ExploreScreen({
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={[styles.container, { paddingTop: top }]}>
 
             {/* Header */}
             <View style={styles.header}>
@@ -239,8 +241,11 @@ export default function ExploreScreen({
                 renderItem={renderSpot}
                 ListEmptyComponent={renderEmpty}
                 contentContainerStyle={styles.list}
+                // iOS adds the tab bar height as a scroll inset, so cards scroll
+                // under the glass bar but the last one can still scroll clear of it
+                contentInsetAdjustmentBehavior="automatic"
             />
-        </SafeAreaView>
+        </View>
     );
 }
 
