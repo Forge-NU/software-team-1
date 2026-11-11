@@ -12,8 +12,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AmenitiesCard from '../components/spot/AmenitiesCard';
 import PhotoStrip from '../components/spot/PhotoStrip';
 import RecentUpdates from '../components/spot/RecentUpdates';
+import SaveButton from '../components/spot/SaveButton';
 import StatusBox from '../components/spot/StatusBox';
 import TopBar from '../components/TopBar';
+import { useSpotBookmark } from '../hooks/useSpotBookmark';
 import { useSpotDetails } from '../hooks/useSpotDetails';
 import { formatFloor, getAmenities, outletLevelForPost } from '../lib/spot';
 import type { Location } from '../types/location';
@@ -38,6 +40,7 @@ export default function SpotDetailScreen({
 }: SpotDetailScreenProps) {
   const { location, posts, photos, seating, loading, vote } =
     useSpotDetails(locationId);
+  const { saved, toggle: toggleSaved } = useSpotBookmark(locationId);
   const { bottom } = useSafeAreaInsets();
 
   if (loading) {
@@ -88,16 +91,8 @@ export default function SpotDetailScreen({
     <View style={styles.container}>
       <TopBar
         title="Spot detail"
-        right={
-          // Bookmarking is not wired up yet, so this is a static button.
-          <Pressable
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Save spot"
-          >
-            <Text style={styles.saveText}>Save</Text>
-          </Pressable>
-        }
+        onBack={onBack}
+        right={<SaveButton saved={saved} onPress={toggleSaved} />}
       />
 
       <ScrollView
@@ -199,10 +194,6 @@ const styles = StyleSheet.create({
   loadingText: {
     ...typography.body,
     marginTop: spacing.md,
-    color: colors.textSecondary,
-  },
-  saveText: {
-    ...typography.bodySmall,
     color: colors.textSecondary,
   },
   scrollContent: {
