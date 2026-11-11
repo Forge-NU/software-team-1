@@ -13,7 +13,9 @@ import { Stack } from 'expo-router';
 import AmenitiesCard from '../components/spot/AmenitiesCard';
 import PhotoStrip from '../components/spot/PhotoStrip';
 import RecentUpdates from '../components/spot/RecentUpdates';
+import SaveButton from '../components/spot/SaveButton';
 import StatusBox from '../components/spot/StatusBox';
+import { useSpotBookmark } from '../hooks/useSpotBookmark';
 import { useSpotDetails } from '../hooks/useSpotDetails';
 import { formatFloor, getAmenities, outletLevelForPost } from '../lib/spot';
 import type { Location } from '../types/location';
@@ -38,6 +40,7 @@ export default function SpotDetailScreen({
 }: SpotDetailScreenProps) {
   const { location, posts, photos, seating, loading, vote } =
     useSpotDetails(locationId);
+  const { saved, toggle: toggleSaved } = useSpotBookmark(locationId);
   const { bottom } = useSafeAreaInsets();
 
   if (loading) {
@@ -88,16 +91,7 @@ export default function SpotDetailScreen({
     <View style={styles.container}>
       <Stack.Screen
         options={{
-          headerRight: () => (
-            // Bookmarking is not wired up yet, so this is a static button.
-            <Pressable
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Save spot"
-            >
-              <Text style={styles.saveText}>Save</Text>
-            </Pressable>
-          ),
+          headerRight: () => <SaveButton saved={saved} onPress={toggleSaved} />,
         }}
       />
 
@@ -203,10 +197,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     marginTop: spacing.md,
     color: colors.textSecondary,
-  },
-  saveText: {
-    ...typography.bodyStrong,
-    color: colors.primaryDark,
   },
   scrollContent: {
     padding: layout.screenPaddingHorizontal,

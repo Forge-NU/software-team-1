@@ -24,6 +24,10 @@ import { stackScreenOptions } from '@/theme/navigation';
 // Keep the splash screen up until the fonts and saved session are ready
 SplashScreen.preventAutoHideAsync();
 
+// Dev only: EXPO_PUBLIC_DEV_SKIP_AUTH=true in .env opens the tabs without signing in, for working
+// on screens that run on mock data. __DEV__ is false in real builds, so this can never ship.
+const DEV_SKIP_AUTH = __DEV__ && process.env.EXPO_PUBLIC_DEV_SKIP_AUTH === 'true';
+
 export default function RootLayout() {
   return (
     <AuthProvider>
@@ -38,7 +42,8 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { isSignedIn, isLoading } = useAuth();
+  const { isSignedIn: hasSession, isLoading } = useAuth();
+  const isSignedIn = hasSession || DEV_SKIP_AUTH;
   const welcomeSeen = useWelcomeSeen();
 
   const [fontsLoaded, fontError] = useFonts({
@@ -82,6 +87,8 @@ function RootNavigator() {
         <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
         <Stack.Screen name="preferences" options={{ headerShown: true, title: 'Study preferences' }} />
         <Stack.Screen name="filters" options={{ headerShown: true, title: 'Filters' }} />
+        {/* F-11: search draws its own Back/Cancel header */}
+        <Stack.Screen name="search" />
         {/* Full-screen prompt with its own buttons, so no header or swipe-back */}
         <Stack.Screen name="location-permission" options={{ gestureEnabled: false }} />
       </Stack.Protected>

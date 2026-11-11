@@ -1,5 +1,14 @@
-import { PlaceholderScreen } from '@/components/PlaceholderScreen';
+import { useRouter } from 'expo-router';
+
+import SavedScreen from '@/screens/SavedScreen';
 
 export default function SavedRoute() {
-  return <PlaceholderScreen ticket="F-9" />;
+  const router = useRouter();
+
+  return (
+    <SavedScreen
+      onOpenSpot={(id) => router.push({ pathname: '/spot/[id]', params: { id: String(id) } })}
+      onFindSpots={() => router.navigate('/')}
+    />
+  );
 }

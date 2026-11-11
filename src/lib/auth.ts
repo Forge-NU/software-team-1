@@ -13,8 +13,10 @@ export async function signUp(
     password,
 
     options: {
+      // Saves extra user information during sign-up
+      // handle_new_user() copies `name` into public.users (it ignores other keys)
       data: {
-        display_name: displayName,
+        name: displayName,
       },
 
       // Confirmation emails redirect into Spotted

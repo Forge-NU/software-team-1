@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -10,7 +10,9 @@ import {
   View,
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
-import { CheckIn, getMyCheckIns, MAX_NAME_LENGTH, signOut } from '../lib/profile'
+import { useFocusEffect } from 'expo-router'
+import { getMyCheckIns, MAX_NAME_LENGTH, signOut } from '../lib/profile'
+import type { CheckIn } from '../types/profile'
 import { useProfile } from '../context/ProfileContext'
 import { colors, layout, radius, spacing, typography } from '../theme'
 
@@ -48,9 +50,13 @@ export default function ProfileScreen({
   onFindSpot,
   onSignedOut,
 }: ProfileScreenProps) {
-  const { profile, loading: profileLoading, setDisplayName } = useProfile()
+  const { profile, loading: profileLoading, refresh: refreshProfile, setDisplayName } = useProfile()
   const [checkIns, setCheckIns] = useState<CheckIn[]>([])
-  const [loading, setLoading] = useState(true)
+  // `loaded` drives the first-load spinner; the ref lets `load` read it without changing identity
+  const [loaded, setLoaded] = useState(false)
+  const hasLoaded = useRef(false)
+  // Only for pull-to-refresh. Focus refreshes run quietly behind the last loaded list.
+  const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [editing, setEditing] = useState(false)
@@ -58,23 +64,42 @@ export default function ProfileScreen({
   const [saving, setSaving] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    if (!profile) return
-    setLoading(true)
-    try {
-      setCheckIns(await getMyCheckIns(profile.userId))
-      setLoadError(null)
-    } catch {
-      setLoadError("Couldn't load your updates. Pull down to try again.")
-    } finally {
-      setLoading(false)
-    }
+  // A different account must never see the previous one's updates
+  useEffect(() => {
+    setCheckIns([])
+    hasLoaded.current = false
+    setLoaded(false)
+    setLoadError(null)
   }, [profile?.userId])
 
-  // TODO(F-1): once navigation exists, also reload when this tab regains focus.
-  useEffect(() => {
-    load()
-  }, [load])
+  const load = useCallback(
+    async ({ showSpinner = false }: { showSpinner?: boolean } = {}) => {
+      if (!profile) return
+      if (showSpinner) setRefreshing(true)
+      try {
+        setCheckIns(await getMyCheckIns(profile.userId))
+        setLoadError(null)
+      } catch {
+        // A quiet refresh keeps the old list; only say so if nothing is shown or the user asked
+        if (!hasLoaded.current || showSpinner) {
+          setLoadError("Couldn't load your updates. Pull down to try again.")
+        }
+      } finally {
+        hasLoaded.current = true
+        setLoaded(true)
+        setRefreshing(false)
+      }
+    },
+    [profile?.userId],
+  )
+
+  // Reload whenever the tab regains focus
+  useFocusEffect(
+    useCallback(() => {
+      load()
+      refreshProfile()
+    }, [load, refreshProfile]),
+  )
 
   const startEditing = () => {
     setDraftName(profile?.displayName ?? '')
@@ -199,7 +224,7 @@ export default function ProfileScreen({
     </View>
   )
 
-  const empty = loading ? (
+  const empty = !loaded ? (
     <ActivityIndicator style={styles.spinner} color={colors.primaryDark} />
   ) : loadError ? null : (
     <View style={[styles.card, styles.empty]}>
@@ -241,8 +266,8 @@ export default function ProfileScreen({
         ListHeaderComponent={header}
         ListEmptyComponent={empty ?? undefined}
         ListFooterComponent={footer}
-        refreshing={loading && count > 0}
-        onRefresh={load}
+        refreshing={refreshing}
+        onRefresh={() => load({ showSpinner: true })}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => (
           <Pressable
