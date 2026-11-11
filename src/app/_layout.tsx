@@ -3,7 +3,6 @@ import '../../global.css';
 
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
-import { getFocusedRouteNameFromRoute } from 'expo-router/react-navigation';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -18,7 +17,6 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { FiltersProvider } from '@/context/FiltersContext';
 import { ProfileProvider } from '@/context/ProfileContext';
 import { useWelcomeSeen } from '@/lib/onboarding';
-import { tabTitle } from '@/lib/tabs';
 import { stackScreenOptions } from '@/theme/navigation';
 
 // Keep the splash screen up until the fonts and saved session are ready
@@ -65,10 +63,9 @@ function RootNavigator() {
   if (!ready) return null;
 
   return (
-    // Pushed screens use the native header, which adds the back button only when there is
-    // somewhere to go back to (not after a deep link). Each tab has its own stack and header
-    // (see app/(tabs)/*/_layout.tsx); auth keeps its TopBar.
-    // A screen adds header buttons with <Stack.Screen options={{ headerRight }} />.
+    // Every signed-in screen lives in a tab's own stack (app/(tabs)/*/_layout.tsx), so the tab bar
+    // stays visible and the native header adds the back button. Only full-screen flows with no tab
+    // bar (auth, password reset, onboarding) are here. Auth keeps its TopBar.
     <Stack screenOptions={{ ...stackScreenOptions, headerShown: false }}>
       {/* B-13: Authentication links and password reset */}
       {/* Accessible regardless of sign-in status */}
@@ -77,17 +74,13 @@ function RootNavigator() {
 
       {/* Screens for signed-in users. Signed-out users see the welcome carousel once (F-8), then sign up */}
       <Stack.Protected guard={isSignedIn} redirectTo={welcomeSeen ? '/sign-up' : '/welcome'}>
+        <Stack.Screen name="(tabs)" />
+        {/* Onboarding step after sign up, under the location prompt. Skip or Save leaves it.
+            From Settings, the same screen opens inside the Profile tab instead. */}
         <Stack.Screen
-          name="(tabs)"
-          // Named after the open tab, so a pushed screen's back menu says e.g. "Profile"
-          options={({ route }) => ({ title: tabTitle(getFocusedRouteNameFromRoute(route)) })}
+          name="preferences"
+          options={{ headerShown: true, title: 'Study preferences', headerBackVisible: false, gestureEnabled: false }}
         />
-        <Stack.Screen name="spot/[id]" options={{ headerShown: true, title: 'Spot detail' }} />
-        <Stack.Screen name="spot/photos/[id]" options={{ headerShown: true, title: 'Recent photos' }} />
-        <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
-        <Stack.Screen name="preferences" options={{ headerShown: true, title: 'Study preferences' }} />
-        <Stack.Screen name="filters" options={{ headerShown: true, title: 'Filters' }} />
-        <Stack.Screen name="search" options={{ headerShown: true, title: 'Search' }} />
         {/* Full-screen prompt with its own buttons, so no header or swipe-back */}
         <Stack.Screen name="location-permission" options={{ gestureEnabled: false }} />
       </Stack.Protected>

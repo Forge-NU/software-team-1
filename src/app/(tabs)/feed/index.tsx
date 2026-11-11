@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 
+import { spotHref } from '@/navigation/SpotRoutes';
 import FeedScreen from '@/screens/FeedScreen';
 
 export default function FeedRoute() {
@@ -7,7 +8,7 @@ export default function FeedRoute() {
 
   return (
     <FeedScreen
-      onOpenSpot={(locationId) => router.push({ pathname: '/spot/[id]', params: { id: String(locationId) } })}
+      onOpenSpot={(locationId) => router.push(spotHref('/feed', locationId))}
     />
   );
 }

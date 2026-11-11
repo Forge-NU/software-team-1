@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 
+import { spotHref } from '@/navigation/SpotRoutes';
 import ExploreScreen from '@/screens/ExploreScreen';
 
 export default function ExploreRoute() {
@@ -7,7 +8,7 @@ export default function ExploreRoute() {
     <ExploreScreen
       onOpenFilters={() => router.push('/filters')}
       onOpenSearch={() => router.push('/search')}
-      onOpenSpot={(locationId) => router.push({ pathname: '/spot/[id]', params: { id: String(locationId) } })}
+      onOpenSpot={(id) => router.push(spotHref('', id))}
     />
   );
 }
