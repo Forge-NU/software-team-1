@@ -4,7 +4,7 @@ import { Tabs, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { getLocationPermission } from '@/lib/locationPermisson';
+import { shouldShowLocationPrompt } from '@/lib/locationPermisson';
 import { colors, typography } from '@/theme';
 
 type IconName = ComponentProps<typeof Feather>['name'];
@@ -39,8 +39,8 @@ export default function TabLayout() {
   const router = useRouter();
 
   useEffect(() => {
-    getLocationPermission().then((permission) => {
-      if (permission === 'denied') router.push('/location-permission');
+    shouldShowLocationPrompt().then((show) => {
+      if (show) router.push('/location-permission');
     });
   }, [router]);
 
