@@ -1,3 +1,4 @@
+
 import '../../global.css';
 
 import { useEffect } from 'react';
@@ -13,18 +14,22 @@ import {
 } from '@expo-google-fonts/afacad';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { FiltersProvider } from '@/context/FiltersContext';
 import { ProfileProvider } from '@/context/ProfileContext';
+import { useWelcomeSeen } from '@/lib/onboarding';
 import { colors } from '@/theme';
 
-// Keep the splash screen up until the fonts and the saved session are ready
+// Keep the splash screen up until the fonts and saved session are ready
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   return (
     <AuthProvider>
       <ProfileProvider>
-        <RootNavigator />
-        <StatusBar style="dark" />
+        <FiltersProvider>
+          <RootNavigator />
+          <StatusBar style="dark" />
+        </FiltersProvider>
       </ProfileProvider>
     </AuthProvider>
   );
@@ -32,32 +37,59 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { isSignedIn, isLoading } = useAuth();
+  const welcomeSeen = useWelcomeSeen();
+
   const [fontsLoaded, fontError] = useFonts({
     Afacad_400Regular,
     Afacad_500Medium,
     Afacad_600SemiBold,
     Afacad_700Bold,
   });
-  // If the fonts fail to load, carry on with the system font rather than hang on the splash
-  const ready = !isLoading && (fontsLoaded || fontError !== null);
+
+  const ready =
+    !isLoading && welcomeSeen !== null && (fontsLoaded || fontError !== null);
 
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync();
+    if (ready) {
+      SplashScreen.hideAsync();
+    }
   }, [ready]);
 
   if (!ready) return null;
 
-  // Auth gate: a screen inside a guard that is false can't be opened, not even by a deep link.
-  // Signing in or out flips the guards, and Expo Router moves the user to the first allowed screen.
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
-      <Stack.Protected guard={isSignedIn}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: colors.background,
+        },
+      }}
+    >
+      {/* B-13: Authentication links and password reset */}
+      {/* Accessible regardless of sign-in status */}
+      <Stack.Screen name="auth/callback" />
+      <Stack.Screen name="reset-password" />
+
+      {/* Screens for signed-in users. Signed-out users see the welcome carousel once (F-8), then sign up */}
+      <Stack.Protected
+        guard={isSignedIn}
+        redirectTo={welcomeSeen ? '/sign-up' : '/welcome'}
+      >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="spot/[id]" />
+        <Stack.Screen name="spot/photos/[id]" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="preferences" />
+        <Stack.Screen name="filters" />
+        <Stack.Screen name="location-permission" options={{ gestureEnabled: false }} />
       </Stack.Protected>
-      <Stack.Protected guard={!isSignedIn}>
+
+      {/* Screens for signed-out users */}
+      <Stack.Protected
+        guard={!isSignedIn}
+        redirectTo="/"
+      >
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
     </Stack>

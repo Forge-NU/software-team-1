@@ -1,9 +1,11 @@
-import type { ComponentProps } from 'react';
-import { View, type ColorValue } from 'react-native';
-import { Tabs } from 'expo-router';
+import { useEffect, type ComponentProps } from 'react';
+import { View } from 'react-native';
+import { Tabs, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { shouldShowLocationPrompt } from '@/lib/locationPermisson';
+import { takePreferencesPending } from '@/lib/onboarding';
 import { colors, typography } from '@/theme';
 
 type IconName = ComponentProps<typeof Feather>['name'];
@@ -21,20 +23,30 @@ const TABS: { name: string; title: string; icon: IconName }[] = [
 const BAR_HEIGHT = 72;
 
 /** Icon inside a round tile: filled when the tab is active, outlined when it isn't. */
-function TabIcon({ name, focused, color }: { name: IconName; focused: boolean; color: ColorValue }) {
+function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
   return (
     <View
       className={`h-9 w-9 items-center justify-center rounded-pill ${
         focused ? 'bg-primaryLight' : 'border border-border bg-surface'
       }`}
     >
-      <Feather name={name} size={20} color={color} />
+      <Feather name={name} size={20} color={focused ? colors.primaryDark : colors.textSecondary} />
     </View>
   );
 }
 
 export default function TabLayout() {
   const { bottom } = useSafeAreaInsets();
+  const router = useRouter();
+
+  // After sign up, Figma's order is the location prompt, then Study preferences (F-8).
+  // Preferences is pushed first so it sits underneath: closing the location screen reveals it.
+  useEffect(() => {
+    Promise.all([takePreferencesPending(), shouldShowLocationPrompt()]).then(([preferences, location]) => {
+      if (preferences) router.push('/preferences');
+      if (location) router.push('/location-permission');
+    });
+  }, [router]);
 
   return (
     <Tabs
@@ -58,7 +70,7 @@ export default function TabLayout() {
           name={tab.name}
           options={{
             title: tab.title,
-            tabBarIcon: ({ focused, color }) => <TabIcon name={tab.icon} focused={focused} color={color} />,
+            tabBarIcon: ({ focused }) => <TabIcon name={tab.icon} focused={focused} />,
           }}
         />
       ))}
