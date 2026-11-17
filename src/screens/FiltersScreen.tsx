@@ -1,7 +1,6 @@
 
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
     ScrollView,
     StyleSheet,
     Text,
@@ -9,18 +8,13 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
 
 import {
     colors,
     spacing,
     radius,
     typography,
-    layout,
 } from '../theme';
-
-import { exploreSpots } from '../lib/explore';
-import { toExploreFilters } from '../lib/filterAdapter';
 
 // All selections from the Filters screen
 export type Filters = {
@@ -53,16 +47,11 @@ type FiltersScreenProps = {
     // Called immediately whenever filters change
     onFiltersChange?: (filters: Filters) => void;
 
-    // Called when Show Results is pressed
+    // Called when Show spots is pressed
     onApply?: (filters: Filters) => void;
-
-    latitude?: number;
-    longitude?: number;
-    radiusMeters?: number;
 };
 
 const noiseOptions = [
-    'Any noise level',
     'Quiet',
     'Social / conversation OK',
 ];
@@ -89,44 +78,13 @@ const priceOptions = [
     { id: 4, label: '$$$$' },
 ];
 
-// B-5 does not support all the original UI choices
-function hasUnsupportedFilters(filters: Filters): boolean {
-    return (
-        filters.atmosphere === 'Social / conversation OK' ||
-        filters.amenities.some(
-            (amenity: string) => amenity !== 'Outlets'
-        ) ||
-        filters.accessible ||
-        filters.minPrice !== null ||
-        filters.maxPrice !== null
-    );
-}
-
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    if (typeof error === 'string') {
-        return error;
-    }
-
-    try {
-        return JSON.stringify(error) ?? String(error);
-    } catch {
-        return String(error);
-    }
-}
-
 export default function FiltersScreen({
     initialFilters = emptyFilters,
     onFiltersChange,
     onApply,
-    latitude,
-    longitude,
-    radiusMeters = 2000,
 }: FiltersScreenProps) {
-    // The footer pads the home indicator; the native header covers the top
+    // The footer clears the home indicator (or keeps a small margin on devices without one);
+    // the native header covers the top
     const { bottom } = useSafeAreaInsets();
 
     // Stores the currently selected options
@@ -138,95 +96,11 @@ export default function FiltersScreen({
         priceRangeIds: [...(initialFilters.priceRangeIds ?? [])],
     }));
 
-    // Backend result count
-    const [count, setCount] = useState<number | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    const hasCoordinates =
-        typeof latitude === 'number' &&
-        Number.isFinite(latitude) &&
-        typeof longitude === 'number' &&
-        Number.isFinite(longitude);
-
-    const unsupported = hasUnsupportedFilters(filters);
-
     // NEW: Apply selections immediately to the parent.
     // No need to press Show Results to save filters.
     useEffect(() => {
         onFiltersChange?.(filters);
     }, [filters, onFiltersChange]);
-
-    // Refresh the result count whenever filters change
-    useEffect(() => {
-        if (!hasCoordinates || unsupported) {
-            setCount(null);
-            setLoading(false);
-            setError(null);
-            return;
-        }
-
-        let cancelled = false;
-
-        setLoading(true);
-        setCount(null);
-        setError(null);
-
-        const timer = setTimeout(async () => {
-            try {
-                const backendFilters = toExploreFilters(filters);
-
-                console.log(
-                    'F-4 filters sent to B-5:',
-                    backendFilters
-                );
-
-                const spots = await exploreSpots({
-                    latitude: latitude!,
-                    longitude: longitude!,
-                    radiusMeters,
-                    filters: backendFilters,
-                    limit: 50,
-                });
-
-                if (!cancelled) {
-                    setCount(spots.length);
-                    setError(null);
-
-                    console.log(
-                        'F-4 matching spots:',
-                        spots.length
-                    );
-                }
-            } catch (err) {
-                console.error(
-                    'F-4 error loading spots:',
-                    err
-                );
-
-                if (!cancelled) {
-                    setError(getErrorMessage(err));
-                    setCount(null);
-                }
-            } finally {
-                if (!cancelled) {
-                    setLoading(false);
-                }
-            }
-        }, 300);
-
-        return () => {
-            cancelled = true;
-            clearTimeout(timer);
-        };
-    }, [
-        filters,
-        latitude,
-        longitude,
-        radiusMeters,
-        hasCoordinates,
-        unsupported,
-    ]);
 
     // Selecting the same noise option again deselects it
     const selectNoise = (value: string) => {
@@ -274,7 +148,7 @@ export default function FiltersScreen({
         }));
     };
 
-    // Reset immediately updates parent through onFiltersChange
+    // Clears the sheet's selections; nothing is applied until Show spots
     const resetFilters = () => {
         setFilters({
             ...emptyFilters,
@@ -337,53 +211,8 @@ export default function FiltersScreen({
         </TouchableOpacity>
     );
 
-    // Render a removable selected filter chip
-    const renderActiveChip = (
-        key: string,
-        label: string,
-        onRemove: () => void
-    ) => (
-        <TouchableOpacity
-            key={key}
-            style={styles.activeChip}
-            onPress={onRemove}
-            accessibilityRole="button"
-            accessibilityLabel={`Remove ${label} filter`}
-        >
-            <Text style={styles.activeChipText}>
-                ✓ {label} ×
-            </Text>
-        </TouchableOpacity>
-    );
-
-    let buttonText = 'Show results';
-
-    if (loading) {
-        buttonText = 'Finding spots…';
-    } else if (count !== null) {
-        buttonText =
-            count === 50
-                ? 'Show 50 spots (limit)'
-                : `Show ${count} ${count === 1 ? 'spot' : 'spots'
-                }`;
-    }
-
     return (
         <View style={styles.container}>
-            <Stack.Screen
-                options={{
-                    headerRight: () => (
-                        <TouchableOpacity
-                            onPress={resetFilters}
-                            hitSlop={12}
-                            accessibilityRole="button"
-                        >
-                            <Text style={styles.resetText}>Reset</Text>
-                        </TouchableOpacity>
-                    ),
-                }}
-            />
-
             {/* Main filter options */}
             <ScrollView
                 style={styles.scrollView}
@@ -392,14 +221,6 @@ export default function FiltersScreen({
                 // Starts below the glass header (iOS 26) but scrolls up under it
                 contentInsetAdjustmentBehavior="automatic"
             >
-                <Text style={styles.title}>
-                    Make your break count.
-                </Text>
-
-                <Text style={styles.subtitle}>
-                    Choose the atmosphere and amenities you need right now.
-                </Text>
-
                 {/* Noise level */}
                 <Text style={styles.sectionTitle}>
                     Noise level
@@ -412,7 +233,8 @@ export default function FiltersScreen({
                             filters.atmosphere === option,
                             () => selectNoise(option),
                             true,
-                            option === 'Social / conversation OK'
+                            // TODO: Change based on size of screen
+                            false
                         )
                     )}
                 </View>
@@ -474,121 +296,34 @@ export default function FiltersScreen({
                         toggleAccessibility
                     )}
                 </View>
-
-                {/* Figma information */}
-                <View style={styles.infoBox}>
-                    <Text style={styles.infoText}>
-                        Crowding is shown separately for every spot;
-                        "quiet" describes noise, not available seats.
-                    </Text>
-                </View>
             </ScrollView>
 
-            {/* Selected filters and results */}
-            <View style={[styles.footer, { paddingBottom: spacing.lg + bottom }]}>
-                <Text style={styles.activeTitle}>
-                    Active filters ({activeCount})
-                </Text>
+            {/* Reset and Show spots */}
+            <View style={[styles.footer, { paddingBottom: bottom }]}>
+                <View style={styles.actions}>
+                    <TouchableOpacity
+                        style={[
+                            styles.resetButton,
+                            activeCount === 0 && styles.disabled,
+                        ]}
+                        onPress={resetFilters}
+                        disabled={activeCount === 0}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: activeCount === 0 }}
+                    >
+                        <Text style={styles.resetText}>Reset</Text>
+                    </TouchableOpacity>
 
-                <ScrollView
-                    style={styles.activeScroll}
-                    contentContainerStyle={styles.activeContainer}
-                    nestedScrollEnabled
-                >
-                    {/* Noise level */}
-                    {filters.atmosphere !== null &&
-                        renderActiveChip(
-                            'noise',
-                            filters.atmosphere,
-                            () => selectNoise(filters.atmosphere!)
-                        )}
-
-                    {/* Location types */}
-                    {filters.locationTypes.map((option) =>
-                        renderActiveChip(
-                            `location-${option}`,
-                            option,
-                            () => toggleMulti('locationTypes', option)
-                        )
-                    )}
-
-                    {/* Amenities */}
-                    {filters.amenities.map((option) =>
-                        renderActiveChip(
-                            `amenity-${option}`,
-                            option,
-                            () => toggleMulti('amenities', option)
-                        )
-                    )}
-
-                    {/* Price categories */}
-                    {filters.priceRangeIds.map((id) =>
-                        renderActiveChip(
-                            `price-${id}`,
-                            priceOptions.find((p) => p.id === id)
-                                ?.label ?? String(id),
-                            () => togglePrice(id)
-                        )
-                    )}
-
-                    {/* Accessibility */}
-                    {filters.accessible &&
-                        renderActiveChip(
-                            'accessible',
-                            'Accessible',
-                            toggleAccessibility
-                        )}
-
-                    {/* Nothing selected */}
-                    {activeCount === 0 && (
-                        <Text style={styles.noFilters}>
-                            No filters selected
+                    <TouchableOpacity
+                        style={styles.showButton}
+                        onPress={() => onApply?.(filters)}
+                        accessibilityRole="button"
+                    >
+                        <Text style={styles.showButtonText}>
+                            Show spots
                         </Text>
-                    )}
-                </ScrollView>
-
-                {/* Missing coordinates */}
-                {!hasCoordinates && (
-                    <Text style={styles.notice}>
-                        Spot count will appear when Explore
-                        provides a map location.
-                    </Text>
-                )}
-
-                {/* Unsupported B-5 options */}
-                {unsupported && (
-                    <Text style={styles.notice}>
-                        Matching count unavailable for some
-                        selected filters.
-                    </Text>
-                )}
-
-                {/* Backend error */}
-                {error && (
-                    <Text style={styles.warning}>
-                        Could not load spot count.
-                        Check the Expo terminal for details.
-                    </Text>
-                )}
-
-                {/* Loading indicator */}
-                {loading && (
-                    <ActivityIndicator
-                        color={colors.primaryDark}
-                        style={styles.spinner}
-                    />
-                )}
-
-                {/* Show Results now only navigates */}
-                <TouchableOpacity
-                    style={styles.showButton}
-                    onPress={() => onApply?.(filters)}
-                    accessibilityRole="button"
-                >
-                    <Text style={styles.showButtonText}>
-                        {buttonText}
-                    </Text>
-                </TouchableOpacity>
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );
@@ -600,34 +335,16 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
     },
 
-    resetText: {
-        ...typography.bodyStrong,
-        color: colors.primaryDark,
-    },
-
     scrollView: {
         flex: 1,
     },
 
     content: {
-        padding: spacing.xl,
-        paddingBottom: spacing.xl,
-    },
-
-    title: {
-        ...typography.title,
-        color: colors.textPrimary,
-        marginBottom: spacing.sm,
-    },
-
-    subtitle: {
-        ...typography.bodySmall,
-        color: colors.textSecondary,
-        marginBottom: spacing.xl,
+        paddingHorizontal: spacing.xl,
     },
 
     sectionTitle: {
-        ...typography.bodyStrong,
+        ...typography.heading,
         color: colors.textPrimary,
         marginBottom: spacing.sm,
     },
@@ -664,7 +381,7 @@ const styles = StyleSheet.create({
     },
 
     optionText: {
-        ...typography.bodySmall,
+        ...typography.body,
         color: colors.textPrimary,
         flexShrink: 1,
     },
@@ -705,81 +422,39 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
 
-    infoBox: {
-        padding: spacing.sm,
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-
-    infoText: {
-        ...typography.caption,
-        color: colors.textSecondary,
-    },
-
     footer: {
         paddingHorizontal: spacing.xl,
         paddingTop: spacing.sm,
-        paddingBottom: spacing.lg,
+        paddingBottom: spacing.sm,
         backgroundColor: colors.background,
         borderTopWidth: 1,
         borderColor: colors.border,
     },
 
-    activeTitle: {
-        ...typography.label,
-        color: colors.textPrimary,
-        marginBottom: spacing.sm,
-    },
-
-    activeScroll: {
-        maxHeight: 88,
-        marginBottom: spacing.md,
-    },
-
-    activeContainer: {
+    actions: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.xs,
-        flexGrow: 1,
+        alignItems: 'center',
+        gap: spacing.sm,
     },
 
-    activeChip: {
-        borderRadius: radius.pill,
-        paddingHorizontal: spacing.sm,
-        paddingVertical: spacing.xs,
-        backgroundColor: colors.primaryLight,
-        borderWidth: 1,
-        borderColor: colors.primary,
+    resetButton: {
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.lg,
+        borderRadius: radius.lg,
+        alignItems: 'center',
     },
 
-    activeChipText: {
-        ...typography.tag,
-        color: colors.textOnPrimaryLight,
+    resetText: {
+        ...typography.bodyStrong,
+        color: colors.primaryDark,
     },
 
-    noFilters: {
-        ...typography.caption,
-        color: colors.textSecondary,
-    },
-
-    warning: {
-        ...typography.caption,
-        color: colors.danger,
-        marginBottom: spacing.sm,
-    },
-
-    notice: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        marginBottom: spacing.sm,
-    },
-
-    spinner: {
-        marginBottom: spacing.xs,
+    disabled: {
+        opacity: 0.4,
     },
 
     showButton: {
+        flex: 1,
         backgroundColor: colors.primary,
         padding: spacing.md,
         borderRadius: radius.lg,
