@@ -1,7 +1,6 @@
 
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
     ScrollView,
     StyleSheet,
     Text,
@@ -15,11 +14,7 @@ import {
     spacing,
     radius,
     typography,
-    layout,
 } from '../theme';
-
-import { exploreSpots } from '../lib/explore';
-import { toExploreFilters } from '../lib/filterAdapter';
 
 // All selections from the Filters screen
 export type Filters = {
@@ -52,12 +47,8 @@ type FiltersScreenProps = {
     // Called immediately whenever filters change
     onFiltersChange?: (filters: Filters) => void;
 
-    // Called when Show Results is pressed
+    // Called when Show spots is pressed
     onApply?: (filters: Filters) => void;
-
-    latitude?: number;
-    longitude?: number;
-    radiusMeters?: number;
 };
 
 const noiseOptions = [
@@ -88,42 +79,10 @@ const priceOptions = [
     { id: 4, label: '$$$$' },
 ];
 
-// B-5 does not support all the original UI choices
-function hasUnsupportedFilters(filters: Filters): boolean {
-    return (
-        filters.atmosphere === 'Social / conversation OK' ||
-        filters.amenities.some(
-            (amenity: string) => amenity !== 'Outlets'
-        ) ||
-        filters.accessible ||
-        filters.minPrice !== null ||
-        filters.maxPrice !== null
-    );
-}
-
-function getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    if (typeof error === 'string') {
-        return error;
-    }
-
-    try {
-        return JSON.stringify(error) ?? String(error);
-    } catch {
-        return String(error);
-    }
-}
-
 export default function FiltersScreen({
     initialFilters = emptyFilters,
     onFiltersChange,
     onApply,
-    latitude,
-    longitude,
-    radiusMeters = 2000,
 }: FiltersScreenProps) {
     // The footer clears the home indicator (or keeps a small margin on devices without one);
     // the native header covers the top
@@ -138,95 +97,11 @@ export default function FiltersScreen({
         priceRangeIds: [...(initialFilters.priceRangeIds ?? [])],
     }));
 
-    // Backend result count
-    const [count, setCount] = useState<number | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    const hasCoordinates =
-        typeof latitude === 'number' &&
-        Number.isFinite(latitude) &&
-        typeof longitude === 'number' &&
-        Number.isFinite(longitude);
-
-    const unsupported = hasUnsupportedFilters(filters);
-
     // NEW: Apply selections immediately to the parent.
     // No need to press Show Results to save filters.
     useEffect(() => {
         onFiltersChange?.(filters);
     }, [filters, onFiltersChange]);
-
-    // Refresh the result count whenever filters change
-    useEffect(() => {
-        if (!hasCoordinates || unsupported) {
-            setCount(null);
-            setLoading(false);
-            setError(null);
-            return;
-        }
-
-        let cancelled = false;
-
-        setLoading(true);
-        setCount(null);
-        setError(null);
-
-        const timer = setTimeout(async () => {
-            try {
-                const backendFilters = toExploreFilters(filters);
-
-                console.log(
-                    'F-4 filters sent to B-5:',
-                    backendFilters
-                );
-
-                const spots = await exploreSpots({
-                    latitude: latitude!,
-                    longitude: longitude!,
-                    radiusMeters,
-                    filters: backendFilters,
-                    limit: 50,
-                });
-
-                if (!cancelled) {
-                    setCount(spots.length);
-                    setError(null);
-
-                    console.log(
-                        'F-4 matching spots:',
-                        spots.length
-                    );
-                }
-            } catch (err) {
-                console.error(
-                    'F-4 error loading spots:',
-                    err
-                );
-
-                if (!cancelled) {
-                    setError(getErrorMessage(err));
-                    setCount(null);
-                }
-            } finally {
-                if (!cancelled) {
-                    setLoading(false);
-                }
-            }
-        }, 300);
-
-        return () => {
-            cancelled = true;
-            clearTimeout(timer);
-        };
-    }, [
-        filters,
-        latitude,
-        longitude,
-        radiusMeters,
-        hasCoordinates,
-        unsupported,
-    ]);
 
     // Selecting the same noise option again deselects it
     const selectNoise = (value: string) => {
@@ -274,7 +149,7 @@ export default function FiltersScreen({
         }));
     };
 
-    // Clears the sheet's selections; nothing is applied until Show results
+    // Clears the sheet's selections; nothing is applied until Show spots
     const resetFilters = () => {
         setFilters({
             ...emptyFilters,
@@ -336,18 +211,6 @@ export default function FiltersScreen({
             </Text>
         </TouchableOpacity>
     );
-
-    let buttonText = 'Show results';
-
-    if (loading) {
-        buttonText = 'Finding spots…';
-    } else if (count !== null) {
-        buttonText =
-            count === 50
-                ? 'Show 50 spots (limit)'
-                : `Show ${count} ${count === 1 ? 'spot' : 'spots'
-                }`;
-    }
 
     return (
         <View style={styles.container}>
@@ -435,40 +298,8 @@ export default function FiltersScreen({
                 </View>
             </ScrollView>
 
-            {/* Result count, Reset and Show results */}
+            {/* Reset and Show spots */}
             <View style={[styles.footer, { paddingBottom: bottom }]}>
-                {/* Missing coordinates */}
-                {!hasCoordinates && (
-                    <Text style={styles.notice}>
-                        Spot count will appear when Explore
-                        provides a map location.
-                    </Text>
-                )}
-
-                {/* Unsupported B-5 options */}
-                {unsupported && (
-                    <Text style={styles.notice}>
-                        Matching count unavailable for some
-                        selected filters.
-                    </Text>
-                )}
-
-                {/* Backend error */}
-                {error && (
-                    <Text style={styles.warning}>
-                        Could not load spot count.
-                        Check the Expo terminal for details.
-                    </Text>
-                )}
-
-                {/* Loading indicator */}
-                {loading && (
-                    <ActivityIndicator
-                        color={colors.primaryDark}
-                        style={styles.spinner}
-                    />
-                )}
-
                 <View style={styles.actions}>
                     <TouchableOpacity
                         style={[
@@ -489,7 +320,7 @@ export default function FiltersScreen({
                         accessibilityRole="button"
                     >
                         <Text style={styles.showButtonText}>
-                            {buttonText}
+                            Show spots
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -598,22 +429,6 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
         borderTopWidth: 1,
         borderColor: colors.border,
-    },
-
-    warning: {
-        ...typography.caption,
-        color: colors.danger,
-        marginBottom: spacing.sm,
-    },
-
-    notice: {
-        ...typography.caption,
-        color: colors.textSecondary,
-        marginBottom: spacing.sm,
-    },
-
-    spinner: {
-        marginBottom: spacing.xs,
     },
 
     actions: {
