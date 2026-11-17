@@ -52,7 +52,6 @@ type FiltersScreenProps = {
 };
 
 const noiseOptions = [
-    'Any noise level',
     'Quiet',
     'Social / conversation OK',
 ];
@@ -234,7 +233,8 @@ export default function FiltersScreen({
                             filters.atmosphere === option,
                             () => selectNoise(option),
                             true,
-                            option === 'Social / conversation OK'
+                            // TODO: Change based on size of screen
+                            false
                         )
                     )}
                 </View>
