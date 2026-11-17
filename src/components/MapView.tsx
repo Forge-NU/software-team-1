@@ -1,6 +1,7 @@
 import { useRef } from 'react';
-import { StyleSheet, View, type DimensionValue, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, StyleSheet, View, type DimensionValue, type StyleProp, type ViewStyle } from 'react-native';
 import MapView, { type Region, type UserLocationChangeEvent } from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SpotMarker from '@/components/SpotMarker';
 import { Text } from '@/components/ui/Text';
 import { isLocationGranted, useLocationPermission } from '@/hooks/useLocationPermission';
@@ -35,11 +36,27 @@ interface MapViewComponentProps<T extends MapSpot> {
     /** Additional styles for the map's container (e.g. border and shadow) */
     style?: StyleProp<ViewStyle>;
     interactive?: boolean;
+    /** Rounded corners and a card look. Turn off for a map that fills the screen. Defaults to true */
+    rounded?: boolean;
+    /**
+     * Space covered by UI drawn over the map (e.g. a bottom sheet). The map keeps its logo,
+     * centering and the OSM credit inside the uncovered area.
+     */
+    insets?: { top?: number; bottom?: number };
     /** Handles pressing on a location */
     onLocationPress?: (l: T) => void;
 }
 
 export default function MapViewComponent<T extends MapSpot>(props: MapViewComponentProps<T>) {
+    const rounded = props.rounded ?? true;
+    const top = props.insets?.top ?? 0;
+    const bottom = props.insets?.bottom ?? 0;
+    // Apple Maps already keeps its logo and centering clear of the safe area (status bar, tab bar)
+    // when the map runs under it, so only pad by the rest. Google Maps on Android doesn't.
+    const safeArea = useSafeAreaInsets();
+    const mapPadding = props.insets && Platform.OS === 'ios'
+        ? { top: Math.max(0, top - safeArea.top), bottom: Math.max(0, bottom - safeArea.bottom), left: 0, right: 0 }
+        : { top, bottom, left: 0, right: 0 };
     const mapRef = useRef<MapView>(null);
     const { permission } = useLocationPermission();
     // Only center on the user once, so the map doesn't jump back while they're panning
@@ -68,8 +85,15 @@ export default function MapViewComponent<T extends MapSpot>(props: MapViewCompon
     // Two wrappers: the outer one carries size, border and shadow, and the inner one clips the map to the rounded corners
     // NOTE: They can't be combined, since clipping on iOS also hides the shadow, and Android map views ignore borderRadius on themselves
     return (
-        <View style={[styles.container, { width: props.width ?? '100%', height: props.height }, props.style]}>
-            <View style={styles.clip}>
+        <View
+            style={[
+                styles.container,
+                !rounded && styles.square,
+                { width: props.width ?? '100%', height: props.height },
+                props.style,
+            ]}
+        >
+            <View style={[styles.clip, !rounded && styles.square]}>
                 <MapView
                     ref={mapRef}
                     style={StyleSheet.absoluteFill}
@@ -78,6 +102,7 @@ export default function MapViewComponent<T extends MapSpot>(props: MapViewCompon
                     showsUserLocation={isLocationGranted(permission)}
                     showsMyLocationButton={false}
                     onUserLocationChange={handleUserLocationChange}
+                    mapPadding={mapPadding}
                 >
                     {props.locations?.map((location) => (
                         <SpotMarker
@@ -89,7 +114,7 @@ export default function MapViewComponent<T extends MapSpot>(props: MapViewCompon
                 </MapView>
                 {/* Spot locations come from OpenStreetMap, whose license (ODbL) requires this credit.
                     Bottom right, so it doesn't cover the map provider's own logo and legal link. */}
-                <View style={styles.attribution} pointerEvents="none">
+                <View style={[styles.attribution, { bottom }]} pointerEvents="none">
                     <Text variant="caption" color="textSecondary">© OpenStreetMap contributors</Text>
                 </View>
             </View>
@@ -103,6 +128,7 @@ const styles = StyleSheet.create({
         // Android only draws elevation shadows on views with a background
         backgroundColor: colors.surface,
     },
+    square: { borderRadius: 0 },
     clip: {
         flex: 1,
         borderRadius: BORDER_RADIUS,

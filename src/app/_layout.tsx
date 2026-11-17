@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   Afacad_400Regular,
   Afacad_500Medium,
@@ -28,14 +29,17 @@ const DEV_SKIP_AUTH = __DEV__ && process.env.EXPO_PUBLIC_DEV_SKIP_AUTH === 'true
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <ProfileProvider>
-        <FiltersProvider>
-          <RootNavigator />
-          <StatusBar style="dark" />
-        </FiltersProvider>
-      </ProfileProvider>
-    </AuthProvider>
+    // Gesture handler root: needed by the Explore results sheet (@gorhom/bottom-sheet)
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <ProfileProvider>
+          <FiltersProvider>
+            <RootNavigator />
+            <StatusBar style="dark" />
+          </FiltersProvider>
+        </ProfileProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
 
