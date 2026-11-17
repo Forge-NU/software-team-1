@@ -9,7 +9,6 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
 
 import {
     colors,
@@ -126,7 +125,8 @@ export default function FiltersScreen({
     longitude,
     radiusMeters = 2000,
 }: FiltersScreenProps) {
-    // The footer pads the home indicator; the native header covers the top
+    // The footer clears the home indicator (or keeps a small margin on devices without one);
+    // the native header covers the top
     const { bottom } = useSafeAreaInsets();
 
     // Stores the currently selected options
@@ -274,7 +274,7 @@ export default function FiltersScreen({
         }));
     };
 
-    // Reset immediately updates parent through onFiltersChange
+    // Clears the sheet's selections; nothing is applied until Show results
     const resetFilters = () => {
         setFilters({
             ...emptyFilters,
@@ -337,25 +337,6 @@ export default function FiltersScreen({
         </TouchableOpacity>
     );
 
-    // Render a removable selected filter chip
-    const renderActiveChip = (
-        key: string,
-        label: string,
-        onRemove: () => void
-    ) => (
-        <TouchableOpacity
-            key={key}
-            style={styles.activeChip}
-            onPress={onRemove}
-            accessibilityRole="button"
-            accessibilityLabel={`Remove ${label} filter`}
-        >
-            <Text style={styles.activeChipText}>
-                ✓ {label} ×
-            </Text>
-        </TouchableOpacity>
-    );
-
     let buttonText = 'Show results';
 
     if (loading) {
@@ -370,20 +351,6 @@ export default function FiltersScreen({
 
     return (
         <View style={styles.container}>
-            <Stack.Screen
-                options={{
-                    headerRight: () => (
-                        <TouchableOpacity
-                            onPress={resetFilters}
-                            hitSlop={12}
-                            accessibilityRole="button"
-                        >
-                            <Text style={styles.resetText}>Reset</Text>
-                        </TouchableOpacity>
-                    ),
-                }}
-            />
-
             {/* Main filter options */}
             <ScrollView
                 style={styles.scrollView}
@@ -484,69 +451,8 @@ export default function FiltersScreen({
                 </View>
             </ScrollView>
 
-            {/* Selected filters and results */}
-            <View style={[styles.footer, { paddingBottom: spacing.lg + bottom }]}>
-                <Text style={styles.activeTitle}>
-                    Active filters ({activeCount})
-                </Text>
-
-                <ScrollView
-                    style={styles.activeScroll}
-                    contentContainerStyle={styles.activeContainer}
-                    nestedScrollEnabled
-                >
-                    {/* Noise level */}
-                    {filters.atmosphere !== null &&
-                        renderActiveChip(
-                            'noise',
-                            filters.atmosphere,
-                            () => selectNoise(filters.atmosphere!)
-                        )}
-
-                    {/* Location types */}
-                    {filters.locationTypes.map((option) =>
-                        renderActiveChip(
-                            `location-${option}`,
-                            option,
-                            () => toggleMulti('locationTypes', option)
-                        )
-                    )}
-
-                    {/* Amenities */}
-                    {filters.amenities.map((option) =>
-                        renderActiveChip(
-                            `amenity-${option}`,
-                            option,
-                            () => toggleMulti('amenities', option)
-                        )
-                    )}
-
-                    {/* Price categories */}
-                    {filters.priceRangeIds.map((id) =>
-                        renderActiveChip(
-                            `price-${id}`,
-                            priceOptions.find((p) => p.id === id)
-                                ?.label ?? String(id),
-                            () => togglePrice(id)
-                        )
-                    )}
-
-                    {/* Accessibility */}
-                    {filters.accessible &&
-                        renderActiveChip(
-                            'accessible',
-                            'Accessible',
-                            toggleAccessibility
-                        )}
-
-                    {/* Nothing selected */}
-                    {activeCount === 0 && (
-                        <Text style={styles.noFilters}>
-                            No filters selected
-                        </Text>
-                    )}
-                </ScrollView>
-
+            {/* Result count, Reset and Show results */}
+            <View style={[styles.footer, { paddingBottom: Math.max(bottom, spacing.lg) }]}>
                 {/* Missing coordinates */}
                 {!hasCoordinates && (
                     <Text style={styles.notice}>
@@ -579,16 +485,30 @@ export default function FiltersScreen({
                     />
                 )}
 
-                {/* Show Results now only navigates */}
-                <TouchableOpacity
-                    style={styles.showButton}
-                    onPress={() => onApply?.(filters)}
-                    accessibilityRole="button"
-                >
-                    <Text style={styles.showButtonText}>
-                        {buttonText}
-                    </Text>
-                </TouchableOpacity>
+                <View style={styles.actions}>
+                    <TouchableOpacity
+                        style={[
+                            styles.resetButton,
+                            activeCount === 0 && styles.disabled,
+                        ]}
+                        onPress={resetFilters}
+                        disabled={activeCount === 0}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: activeCount === 0 }}
+                    >
+                        <Text style={styles.resetText}>Reset</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.showButton}
+                        onPress={() => onApply?.(filters)}
+                        accessibilityRole="button"
+                    >
+                        <Text style={styles.showButtonText}>
+                            {buttonText}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );
@@ -598,11 +518,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.background,
-    },
-
-    resetText: {
-        ...typography.bodyStrong,
-        color: colors.primaryDark,
     },
 
     scrollView: {
@@ -726,43 +641,6 @@ const styles = StyleSheet.create({
         borderColor: colors.border,
     },
 
-    activeTitle: {
-        ...typography.label,
-        color: colors.textPrimary,
-        marginBottom: spacing.sm,
-    },
-
-    activeScroll: {
-        maxHeight: 88,
-        marginBottom: spacing.md,
-    },
-
-    activeContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.xs,
-        flexGrow: 1,
-    },
-
-    activeChip: {
-        borderRadius: radius.pill,
-        paddingHorizontal: spacing.sm,
-        paddingVertical: spacing.xs,
-        backgroundColor: colors.primaryLight,
-        borderWidth: 1,
-        borderColor: colors.primary,
-    },
-
-    activeChipText: {
-        ...typography.tag,
-        color: colors.textOnPrimaryLight,
-    },
-
-    noFilters: {
-        ...typography.caption,
-        color: colors.textSecondary,
-    },
-
     warning: {
         ...typography.caption,
         color: colors.danger,
@@ -779,7 +657,30 @@ const styles = StyleSheet.create({
         marginBottom: spacing.xs,
     },
 
+    actions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+    },
+
+    resetButton: {
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.lg,
+        borderRadius: radius.lg,
+        alignItems: 'center',
+    },
+
+    resetText: {
+        ...typography.bodyStrong,
+        color: colors.primaryDark,
+    },
+
+    disabled: {
+        opacity: 0.4,
+    },
+
     showButton: {
+        flex: 1,
         backgroundColor: colors.primary,
         padding: spacing.md,
         borderRadius: radius.lg,
