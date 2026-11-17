@@ -359,14 +359,6 @@ export default function FiltersScreen({
                 // Starts below the glass header (iOS 26) but scrolls up under it
                 contentInsetAdjustmentBehavior="automatic"
             >
-                <Text style={styles.title}>
-                    Make your break count.
-                </Text>
-
-                <Text style={styles.subtitle}>
-                    Choose the atmosphere and amenities you need right now.
-                </Text>
-
                 {/* Noise level */}
                 <Text style={styles.sectionTitle}>
                     Noise level
@@ -440,14 +432,6 @@ export default function FiltersScreen({
                         filters.accessible,
                         toggleAccessibility
                     )}
-                </View>
-
-                {/* Figma information */}
-                <View style={styles.infoBox}>
-                    <Text style={styles.infoText}>
-                        Crowding is shown separately for every spot;
-                        "quiet" describes noise, not available seats.
-                    </Text>
                 </View>
             </ScrollView>
 
@@ -529,18 +513,6 @@ const styles = StyleSheet.create({
         paddingBottom: spacing.xl,
     },
 
-    title: {
-        ...typography.title,
-        color: colors.textPrimary,
-        marginBottom: spacing.sm,
-    },
-
-    subtitle: {
-        ...typography.bodySmall,
-        color: colors.textSecondary,
-        marginBottom: spacing.xl,
-    },
-
     sectionTitle: {
         ...typography.bodyStrong,
         color: colors.textPrimary,
@@ -618,18 +590,6 @@ const styles = StyleSheet.create({
         color: colors.primaryDark,
         fontSize: 13,
         fontWeight: '700',
-    },
-
-    infoBox: {
-        padding: spacing.sm,
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-
-    infoText: {
-        ...typography.caption,
-        color: colors.textSecondary,
     },
 
     footer: {
