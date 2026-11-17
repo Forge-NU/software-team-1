@@ -509,8 +509,7 @@ const styles = StyleSheet.create({
     },
 
     content: {
-        padding: spacing.xl,
-        paddingBottom: spacing.xl,
+        paddingHorizontal: spacing.xl,
     },
 
     sectionTitle: {
