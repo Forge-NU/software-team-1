@@ -13,7 +13,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useFocusEffect } from 'expo-router';
-import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, {
+    Extrapolation,
+    interpolate,
+    useAnimatedStyle,
+    useDerivedValue,
+    useSharedValue,
+} from 'react-native-reanimated';
 
 import { colors, spacing, radius, typography, layout } from '../theme';
 
@@ -89,17 +95,18 @@ export default function ExploreScreen({
         [headerHeight, tabBarOverlap],
     );
 
-    // How much of the map the sheet covers, so the map keeps its logo and credit above it.
-    // Capped at half the screen: past that there's little map left to keep things in.
-    // Starts at the default half-screen height, so the map centers correctly before the sheet reports in.
-    const [sheetCover, setSheetCover] = useState<number | null>(null);
-    // gorhom measures `position` from below `topInset` (the status bar), not from the top of the screen
-    const handleSheetChange = (index: number, position: number) => {
+    // How much of the map the sheet covers, live while it's dragged, so the map keeps its logo and
+    // credit just above it. gorhom's animatedPosition is the sheet's top, measured from the top of the
+    // screen. Capped at half the screen: past that there's little map left to keep things in.
+    const sheetPosition = useSharedValue(0);
+    const sheetCover = useDerivedValue(() => {
+        // Before the sheet lays out: its default '50%' height, which gorhom takes from below topInset
+        if (sheetPosition.value <= 0) return (screenHeight - insets.top) * 0.5;
+        return Math.min(screenHeight - sheetPosition.value, screenHeight * 0.5);
+    });
+    const handleSheetChange = (index: number) => {
         snapIndex.current = index;
-        setSheetCover(Math.min(screenHeight - insets.top - position, screenHeight * 0.5));
     };
-    // Before the first onChange: the default '50%' height, which gorhom takes from the space below topInset
-    const defaultCover = (screenHeight - insets.top) * 0.5;
 
     // Android back first shrinks an expanded sheet, then leaves as usual
     useFocusEffect(
@@ -189,7 +196,7 @@ export default function ExploreScreen({
             <MapViewComponent
                 height="100%"
                 rounded={false}
-                insets={{ top: insets.top, bottom: sheetCover ?? defaultCover }}
+                insets={{ top: insets.top, bottom: sheetCover }}
                 locations={spots}
                 onLocationPress={(spot) => onOpenSpot(spot.location_id)}
             />
@@ -206,6 +213,7 @@ export default function ExploreScreen({
                     topInset={insets.top}
                     onChange={handleSheetChange}
                     animatedIndex={animatedIndex}
+                    animatedPosition={sheetPosition}
                     backgroundStyle={styles.sheetBackground}
                     handleIndicatorStyle={styles.handleIndicator}
                     style={styles.sheetShadow}
