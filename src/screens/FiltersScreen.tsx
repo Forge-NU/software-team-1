@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
     },
 
     sectionTitle: {
-        ...typography.bodyStrong,
+        ...typography.heading,
         color: colors.textPrimary,
         marginBottom: spacing.sm,
     },
@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
     },
 
     optionText: {
-        ...typography.bodySmall,
+        ...typography.body,
         color: colors.textPrimary,
         flexShrink: 1,
     },
