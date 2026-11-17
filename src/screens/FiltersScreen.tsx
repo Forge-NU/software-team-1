@@ -436,7 +436,7 @@ export default function FiltersScreen({
             </ScrollView>
 
             {/* Result count, Reset and Show results */}
-            <View style={[styles.footer, { paddingBottom: Math.max(bottom, spacing.lg) }]}>
+            <View style={[styles.footer, { paddingBottom: bottom }]}>
                 {/* Missing coordinates */}
                 {!hasCoordinates && (
                     <Text style={styles.notice}>
@@ -595,7 +595,7 @@ const styles = StyleSheet.create({
     footer: {
         paddingHorizontal: spacing.xl,
         paddingTop: spacing.sm,
-        paddingBottom: spacing.lg,
+        paddingBottom: spacing.sm,
         backgroundColor: colors.background,
         borderTopWidth: 1,
         borderColor: colors.border,
