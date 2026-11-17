@@ -1,28 +1,16 @@
 import { router, Stack } from 'expo-router';
 
-import HeaderFilterButton from '@/components/HeaderFilterButton';
-import { useFilters } from '@/context/FiltersContext';
 import { spotHref } from '@/navigation/SpotRoutes';
 import ExploreScreen from '@/screens/ExploreScreen';
 
 export default function ExploreRoute() {
-  const { activeChips } = useFilters();
-
   return (
     <>
-      {/* Filters lives in the header's top right; it opens the Filters sheet */}
-      <Stack.Screen
-        options={{
-          headerRight: () => (
-            <HeaderFilterButton
-              activeCount={activeChips.length}
-              onPress={() => router.push('/filters')}
-            />
-          ),
-        }}
-      />
+      {/* No header: the map fills the screen, and search and Filters live in the results sheet */}
+      <Stack.Screen options={{ headerShown: false }} />
       <ExploreScreen
         onOpenSearch={() => router.push('/search')}
+        onOpenFilters={() => router.push('/filters')}
         onOpenSpot={(id) => router.push(spotHref('', id))}
       />
     </>
