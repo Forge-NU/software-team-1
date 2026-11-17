@@ -1,6 +1,7 @@
 
 import { Feather } from '@expo/vector-icons';
 import {
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -97,8 +98,14 @@ export default function ExploreScreen({
                             accessibilityLabel={`Remove ${chip.label} filter`}
                         >
                             <Text style={styles.activeChipText}>
-                                ✓ {chip.label} ×
+                                {chip.label}
                             </Text>
+                            {/* An icon rather than a "×" character, which sits low in this font */}
+                            <Feather
+                                name="x"
+                                size={12}
+                                color={colors.textOnPrimaryLight}
+                            />
                         </TouchableOpacity>
                     ))}
 
@@ -194,6 +201,9 @@ const styles = StyleSheet.create({
     },
 
     activeChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xxs,
         borderRadius: radius.pill,
         paddingHorizontal: spacing.sm,
         paddingVertical: spacing.xs,
@@ -204,6 +214,11 @@ const styles = StyleSheet.create({
 
     activeChipText: {
         ...typography.tag,
+        // tag's lineHeight equals its fontSize, which is shorter than Afacad's glyph box, so the
+        // letters get pushed to the top of the line and sit above the centered X icon
+        lineHeight: 16,
+        // Afacad's letters also sit a little high in their line on iOS; nudge them down to center
+        ...Platform.select({ ios: { transform: [{ translateY: 1 }] }, default: {} }),
         color: colors.textOnPrimaryLight,
     },
 
