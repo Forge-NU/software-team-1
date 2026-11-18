@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import {
     BackHandler,
+    Keyboard,
     Platform,
     Pressable,
     ScrollView,
@@ -11,7 +12,7 @@ import {
     View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { useFocusEffect } from 'expo-router';
 import Animated, {
     Extrapolation,
@@ -25,6 +26,7 @@ import { colors, spacing, radius, typography, layout } from '../theme';
 
 import { ExploreSpotList } from '../components/ExploreSpotList';
 import MapViewComponent from '../components/MapView';
+import { SpotSearchResult, SpotSearchStatus, useSpotSearch } from '../components/SpotSearch';
 import { EXPLORE_SORT } from '../constants/explore';
 
 import { getUnsupportedLabels, useFilters } from '../context/FiltersContext';
@@ -33,7 +35,6 @@ import { toExploreFilters } from '../lib/filterAdapter';
 import { NU_CAMPUS } from '../lib/exploreSource';
 
 type ExploreScreenProps = {
-    onOpenSearch?: () => void;
     onOpenFilters?: () => void;
     onOpenSpot: (locationId: number) => void;
     latitude?: number;
@@ -42,12 +43,13 @@ type ExploreScreenProps = {
 
 /** The sheet starts at its middle height: half the screen, showing the first few spots */
 const DEFAULT_SNAP = 1;
+/** Full height: where the sheet goes, and stays, while searching */
+const FULL_SNAP = 2;
 /** Height of the sheet's drag handle area (gorhom's default handle) */
 const HANDLE_HEIGHT = 24;
 
 export default function ExploreScreen({
     onOpenSpot,
-    onOpenSearch,
     onOpenFilters,
     latitude = NU_CAMPUS.latitude,
     longitude = NU_CAMPUS.longitude,
@@ -73,6 +75,8 @@ export default function ExploreScreen({
     // The screen's height, and the sheet header's, both measured on layout
     const [screenHeight, setScreenHeight] = useState(0);
     const [headerHeight, setHeaderHeight] = useState(0);
+    // Whether search is open (see startSearch below)
+    const [searchActive, setSearchActive] = useState(false);
 
     // How far the tab bar covers the bottom of the screen. On iOS the screen runs under the glass
     // tab bar, so the sheet does too and needs room for it; each tab's safe area includes the tab
@@ -90,9 +94,14 @@ export default function ExploreScreen({
     // - just the header (search, Filters and chips) above the tab bar, so most of the map shows
     // - half the screen, the default, with the first few spots
     // - full height, for browsing the list (stops below the status bar via topInset)
+    // While searching, every height is full height, so the sheet stays put if it's dragged. (Turning
+    // off enableContentPanningGesture instead would make gorhom remount the sheet's content, which
+    // drops the search field's focus.)
     const snapPoints = useMemo(
-        () => [Math.max(HANDLE_HEIGHT + headerHeight + tabBarOverlap, 120), '50%', '100%'],
-        [headerHeight, tabBarOverlap],
+        () => searchActive
+            ? ['100%', '100%', '100%']
+            : [Math.max(HANDLE_HEIGHT + headerHeight + tabBarOverlap, 120), '50%', '100%'],
+        [searchActive, headerHeight, tabBarOverlap],
     );
 
     // How much of the map the sheet covers, live while it's dragged, so the map keeps its logo and
@@ -108,16 +117,43 @@ export default function ExploreScreen({
         snapIndex.current = index;
     };
 
-    // Android back first shrinks an expanded sheet, then leaves as usual
+    // F-11: Search, right in the sheet. Focusing the field starts searching: the sheet goes to full
+    // height and can't be dragged until Cancel. Until there's text, the usual list shows.
+    const [query, setQuery] = useState('');
+    const trimmedQuery = query.trim();
+    const showingResults = searchActive && trimmedQuery.length > 0;
+    const search = useSpotSearch(query, searchActive);
+    // The height to go back to after Cancel
+    const snapBeforeSearch = useRef(DEFAULT_SNAP);
+
+    const startSearch = () => {
+        if (searchActive) return;
+        snapBeforeSearch.current = snapIndex.current;
+        setSearchActive(true);
+        sheet.current?.snapToIndex(FULL_SNAP);
+    };
+
+    const cancelSearch = useCallback(() => {
+        Keyboard.dismiss();
+        setQuery('');
+        setSearchActive(false);
+        sheet.current?.snapToIndex(snapBeforeSearch.current);
+    }, []);
+
+    // Android back: leaves search, then shrinks an expanded sheet, then leaves as usual
     useFocusEffect(
         useCallback(() => {
             const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+                if (searchActive) {
+                    cancelSearch();
+                    return true;
+                }
                 if (snapIndex.current <= 0) return false;
                 sheet.current?.snapToIndex(0);
                 return true;
             });
             return () => sub.remove();
-        }, []),
+        }, [searchActive, cancelSearch]),
     );
 
     const filtersActive = activeChips.length > 0;
@@ -125,41 +161,70 @@ export default function ExploreScreen({
     const header = (
         <View style={styles.header} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
             <View style={styles.searchRow}>
-                {/* F-11: Search bar */}
-                <TouchableOpacity
-                    style={styles.searchButton}
-                    onPress={onOpenSearch}
-                    accessibilityRole="button"
-                    accessibilityLabel="Search spots or buildings"
-                >
+                {/* F-11: Search field. gorhom's text input keeps the sheet in step with the keyboard. */}
+                <View style={styles.searchField}>
                     <Feather name="search" size={20} color={colors.textSecondary} />
-                    <Text style={styles.searchPlaceholder}>Search spots or buildings</Text>
-                </TouchableOpacity>
+                    <BottomSheetTextInput
+                        value={query}
+                        onChangeText={setQuery}
+                        onFocus={startSearch}
+                        placeholder="Search spots or buildings"
+                        placeholderTextColor={colors.textSecondary}
+                        autoCorrect={false}
+                        autoCapitalize="none"
+                        returnKeyType="search"
+                        style={styles.searchInput}
+                        accessibilityLabel="Search spots or buildings"
+                    />
+                    {query.length > 0 && (
+                        <Pressable
+                            onPress={() => setQuery('')}
+                            hitSlop={10}
+                            accessibilityRole="button"
+                            accessibilityLabel="Clear search"
+                        >
+                            <Feather name="x-circle" size={18} color={colors.textSecondary} />
+                        </Pressable>
+                    )}
+                </View>
 
-                {/* Filters: opens the Filters sheet */}
-                <Pressable
-                    style={[styles.filterButton, filtersActive && styles.filterButtonActive]}
-                    onPress={onOpenFilters}
-                    hitSlop={4}
-                    accessibilityRole="button"
-                    accessibilityLabel={filtersActive ? `Filters, ${activeChips.length} active` : 'Filters'}
-                    android_ripple={{ color: colors.border, borderless: true, radius: 24 }}
-                >
-                    {Platform.OS === 'ios' ? (
-                        <Ionicons name="filter" size={20} color={filtersActive ? colors.primaryDark : colors.textPrimary} />
-                    ) : (
-                        <MaterialIcons name="filter-list" size={22} color={filtersActive ? colors.primaryDark : colors.textPrimary} />
-                    )}
-                    {filtersActive && (
-                        <View style={styles.badge}>
-                            <Text style={styles.badgeText}>{activeChips.length}</Text>
-                        </View>
-                    )}
-                </Pressable>
+                {/* While searching, Cancel takes the Filters button's place */}
+                {searchActive ? (
+                    <Pressable
+                        onPress={cancelSearch}
+                        hitSlop={8}
+                        style={styles.cancelButton}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel search"
+                    >
+                        <Text style={styles.cancelText}>Cancel</Text>
+                    </Pressable>
+                ) : (
+                    /* Filters: opens the Filters sheet */
+                    <Pressable
+                        style={[styles.filterButton, filtersActive && styles.filterButtonActive]}
+                        onPress={onOpenFilters}
+                        hitSlop={4}
+                        accessibilityRole="button"
+                        accessibilityLabel={filtersActive ? `Filters, ${activeChips.length} active` : 'Filters'}
+                        android_ripple={{ color: colors.border, borderless: true, radius: 24 }}
+                    >
+                        {Platform.OS === 'ios' ? (
+                            <Ionicons name="filter" size={20} color={filtersActive ? colors.primaryDark : colors.textPrimary} />
+                        ) : (
+                            <MaterialIcons name="filter-list" size={22} color={filtersActive ? colors.primaryDark : colors.textPrimary} />
+                        )}
+                        {filtersActive && (
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>{activeChips.length}</Text>
+                            </View>
+                        )}
+                    </Pressable>
+                )}
             </View>
 
-            {/* Active filter chips */}
-            {filtersActive && (
+            {/* Active filter chips. Hidden while showing search results, which filters don't narrow. */}
+            {filtersActive && !showingResults && (
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -212,6 +277,10 @@ export default function ExploreScreen({
                     enablePanDownToClose={false}
                     topInset={insets.top}
                     onChange={handleSheetChange}
+                    enableHandlePanningGesture={!searchActive}
+                    keyboardBehavior="extend"
+                    keyboardBlurBehavior="none"
+                    android_keyboardInputMode="adjustResize"
                     animatedIndex={animatedIndex}
                     animatedPosition={sheetPosition}
                     backgroundStyle={styles.sheetBackground}
@@ -222,23 +291,47 @@ export default function ExploreScreen({
                     <Animated.View style={[styles.listArea, listFade]}>
                         <BottomSheetScrollView
                             contentContainerStyle={[styles.list, { paddingBottom: spacing.xl + tabBarOverlap }]}
+                            // Results stay tappable with the keyboard up, and scrolling puts it away
+                            keyboardShouldPersistTaps="handled"
+                            keyboardDismissMode="on-drag"
                         >
-                            {/* Filters B-5 can't apply yet */}
-                            {unsupported.length > 0 && (
-                                <Text style={styles.notice}>Not applied yet: {unsupported.join(', ')}</Text>
-                            )}
+                            {showingResults ? (
+                                <View style={styles.searchResults}>
+                                    {!search.loading && !search.error && search.results.map((spot) => (
+                                        <SpotSearchResult
+                                            key={`${spot.locationId}-${spot.seatingId ?? 'location'}`}
+                                            spot={spot}
+                                            onPress={(picked) => onOpenSpot(picked.locationId)}
+                                        />
+                                    ))}
+                                    <SpotSearchStatus
+                                        query={trimmedQuery}
+                                        loading={search.loading}
+                                        error={search.error}
+                                        onRetry={search.retry}
+                                        hasResults={search.results.length > 0}
+                                    />
+                                </View>
+                            ) : (
+                                <>
+                                    {/* Filters B-5 can't apply yet */}
+                                    {unsupported.length > 0 && (
+                                        <Text style={styles.notice}>Not applied yet: {unsupported.join(', ')}</Text>
+                                    )}
 
-                            {/* Results (F-3): ranked SpotCards, with loading, error and empty states */}
-                            <ExploreSpotList
-                                spots={spots}
-                                loading={loading}
-                                error={error}
-                                // Only filters B-5 actually applies; unsupported ones don't narrow the list
-                                filtered={hasActiveFilters(exploreFilters)}
-                                onOpenSpot={onOpenSpot}
-                                onRetry={refresh}
-                                onClearFilters={clearAll}
-                            />
+                                    {/* Results (F-3): ranked SpotCards, with loading, error and empty states */}
+                                    <ExploreSpotList
+                                        spots={spots}
+                                        loading={loading}
+                                        error={error}
+                                        // Only filters B-5 actually applies; unsupported ones don't narrow the list
+                                        filtered={hasActiveFilters(exploreFilters)}
+                                        onOpenSpot={onOpenSpot}
+                                        onRetry={refresh}
+                                        onClearFilters={clearAll}
+                                    />
+                                </>
+                            )}
                         </BottomSheetScrollView>
                     </Animated.View>
                 </BottomSheet>
@@ -289,7 +382,7 @@ const styles = StyleSheet.create({
     },
 
     // F-11 search styles
-    searchButton: {
+    searchField: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
@@ -303,10 +396,25 @@ const styles = StyleSheet.create({
         minHeight: FILTER_BUTTON_SIZE,
     },
 
-    searchPlaceholder: {
+    searchInput: {
         ...typography.body,
-        color: colors.textSecondary,
+        flex: 1,
+        color: colors.textPrimary,
+        paddingVertical: 0,
     },
+
+    cancelButton: {
+        height: FILTER_BUTTON_SIZE,
+        justifyContent: 'center',
+        paddingHorizontal: spacing.xxs,
+    },
+
+    cancelText: {
+        ...typography.bodyStrong,
+        color: colors.primaryDark,
+    },
+
+    searchResults: { gap: spacing.sm },
 
     filterButton: {
         width: FILTER_BUTTON_SIZE,
