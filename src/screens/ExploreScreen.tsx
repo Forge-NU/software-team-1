@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import {
     BackHandler,
     Keyboard,
@@ -26,6 +26,7 @@ import { colors, spacing, radius, typography, layout } from '../theme';
 
 import { ExploreSpotList } from '../components/ExploreSpotList';
 import MapViewComponent from '../components/MapView';
+import SheetFilterButton from '../components/SheetFilterButton';
 import { SpotSearchResult, SpotSearchStatus, useSpotSearch } from '../components/SpotSearch';
 import { EXPLORE_SORT } from '../constants/explore';
 
@@ -35,7 +36,7 @@ import { toExploreFilters } from '../lib/filterAdapter';
 import { NU_CAMPUS } from '../lib/exploreSource';
 
 type ExploreScreenProps = {
-    onOpenFilters?: () => void;
+    onOpenFilters: () => void;
     onOpenSpot: (locationId: number) => void;
     latitude?: number;
     longitude?: number;
@@ -201,25 +202,7 @@ export default function ExploreScreen({
                     </Pressable>
                 ) : (
                     /* Filters: opens the Filters sheet */
-                    <Pressable
-                        style={[styles.filterButton, filtersActive && styles.filterButtonActive]}
-                        onPress={onOpenFilters}
-                        hitSlop={4}
-                        accessibilityRole="button"
-                        accessibilityLabel={filtersActive ? `Filters, ${activeChips.length} active` : 'Filters'}
-                        android_ripple={{ color: colors.border, borderless: true, radius: 24 }}
-                    >
-                        {Platform.OS === 'ios' ? (
-                            <Ionicons name="filter" size={20} color={filtersActive ? colors.primaryDark : colors.textPrimary} />
-                        ) : (
-                            <MaterialIcons name="filter-list" size={22} color={filtersActive ? colors.primaryDark : colors.textPrimary} />
-                        )}
-                        {filtersActive && (
-                            <View style={styles.badge}>
-                                <Text style={styles.badgeText}>{activeChips.length}</Text>
-                            </View>
-                        )}
-                    </Pressable>
+                    <SheetFilterButton activeCount={activeChips.length} onPress={onOpenFilters} />
                 )}
             </View>
 
@@ -415,37 +398,6 @@ const styles = StyleSheet.create({
     },
 
     searchResults: { gap: spacing.sm },
-
-    filterButton: {
-        width: FILTER_BUTTON_SIZE,
-        height: FILTER_BUTTON_SIZE,
-        borderRadius: FILTER_BUTTON_SIZE / 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-
-    filterButtonActive: {
-        backgroundColor: colors.primaryLight,
-        borderColor: colors.primary,
-    },
-
-    badge: {
-        position: 'absolute',
-        top: -2,
-        right: -2,
-        minWidth: 18,
-        height: 18,
-        paddingHorizontal: 4,
-        borderRadius: 9,
-        backgroundColor: colors.primaryDark,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-
-    badgeText: { ...typography.caption, fontSize: 11, lineHeight: 13, color: colors.textOnPrimary },
 
     chipRow: {
         flexGrow: 0,
