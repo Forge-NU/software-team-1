@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Feather } from '@expo/vector-icons';
 import {
     BackHandler,
@@ -10,9 +10,10 @@ import {
     Text,
     TouchableOpacity,
     View,
+    type LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import BottomSheet, { BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { useFocusEffect } from 'expo-router';
 import Animated, {
     Extrapolation,
@@ -27,6 +28,7 @@ import { colors, spacing, radius, typography, layout } from '../theme';
 import { ExploreSpotList } from '../components/ExploreSpotList';
 import MapViewComponent from '../components/MapView';
 import SheetFilterButton from '../components/SheetFilterButton';
+import SheetScrollArea from '../components/SheetScrollArea';
 import { SpotSearchResult, SpotSearchStatus, useSpotSearch } from '../components/SpotSearch';
 import { EXPLORE_SORT } from '../constants/explore';
 
@@ -46,8 +48,24 @@ type ExploreScreenProps = {
 const DEFAULT_SNAP = 1;
 /** Full height: where the sheet goes, and stays, while searching */
 const FULL_SNAP = 2;
-/** Height of the sheet's drag handle area (gorhom's default handle) */
-const HANDLE_HEIGHT = 24;
+
+/**
+ * The sheet's header (grabber, search, Filters, chips) is rendered as gorhom's *handle*, so dragging
+ * anywhere on it moves the sheet. gorhom takes the handle as a component type, which has to stay the
+ * same between renders (a new one would remount the header and drop the search field's focus), so
+ * this fixed component gets the header itself from context.
+ */
+const SheetHeaderContext = createContext<{ header: ReactNode; onLayout: (e: LayoutChangeEvent) => void } | null>(null);
+
+function SheetHandle() {
+    const value = useContext(SheetHeaderContext);
+    return (
+        <View onLayout={value?.onLayout}>
+            <View style={styles.grabber} />
+            {value?.header}
+        </View>
+    );
+}
 
 export default function ExploreScreen({
     onOpenSpot,
@@ -73,9 +91,10 @@ export default function ExploreScreen({
     const sheet = useRef<BottomSheet>(null);
     const snapIndex = useRef(DEFAULT_SNAP);
 
-    // The screen's height, and the sheet header's, both measured on layout
+    // The screen's height, and the sheet header's (grabber included), both measured on layout
     const [screenHeight, setScreenHeight] = useState(0);
     const [headerHeight, setHeaderHeight] = useState(0);
+    const handleHeaderLayout = useCallback((e: LayoutChangeEvent) => setHeaderHeight(e.nativeEvent.layout.height), []);
     // Whether search is open (see startSearch below)
     const [searchActive, setSearchActive] = useState(false);
 
@@ -95,13 +114,13 @@ export default function ExploreScreen({
     // - just the header (search, Filters and chips) above the tab bar, so most of the map shows
     // - half the screen, the default, with the first few spots
     // - full height, for browsing the list (stops below the status bar via topInset)
-    // While searching, every height is full height, so the sheet stays put if it's dragged. (Turning
-    // off enableContentPanningGesture instead would make gorhom remount the sheet's content, which
-    // drops the search field's focus.)
+    // While searching, every height is full height. Drags can't move the sheet then anyway, but
+    // gorhom's keyboard handling snaps back to an earlier height when the keyboard closes, and this
+    // keeps that at full height too.
     const snapPoints = useMemo(
         () => searchActive
             ? ['100%', '100%', '100%']
-            : [Math.max(HANDLE_HEIGHT + headerHeight + tabBarOverlap, 120), '50%', '100%'],
+            : [Math.max(headerHeight + tabBarOverlap, 120), '50%', '100%'],
         [searchActive, headerHeight, tabBarOverlap],
     );
 
@@ -160,7 +179,7 @@ export default function ExploreScreen({
     const filtersActive = activeChips.length > 0;
 
     const header = (
-        <View style={styles.header} onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
+        <View style={styles.header}>
             <View style={styles.searchRow}>
                 {/* F-11: Search field. gorhom's text input keeps the sheet in step with the keyboard. */}
                 <View style={styles.searchField}>
@@ -252,72 +271,83 @@ export default function ExploreScreen({
             {/* Results sheet, like Apple Maps / Google Maps. It's part of this screen, so it sits above
                 the tab bar, can't be swiped away, and leaves the map usable behind it. */}
             {screenHeight > 0 && (
-                <BottomSheet
-                    ref={sheet}
-                    index={DEFAULT_SNAP}
-                    snapPoints={snapPoints}
-                    enableDynamicSizing={false}
-                    enablePanDownToClose={false}
-                    topInset={insets.top}
-                    onChange={handleSheetChange}
-                    enableHandlePanningGesture={!searchActive}
-                    keyboardBehavior="extend"
-                    keyboardBlurBehavior="none"
-                    android_keyboardInputMode="adjustResize"
-                    animatedIndex={animatedIndex}
-                    animatedPosition={sheetPosition}
-                    backgroundStyle={styles.sheetBackground}
-                    handleIndicatorStyle={styles.handleIndicator}
-                    style={styles.sheetShadow}
-                >
-                    {header}
-                    <Animated.View style={[styles.listArea, listFade]}>
-                        <BottomSheetScrollView
-                            contentContainerStyle={[styles.list, { paddingBottom: spacing.xl + tabBarOverlap }]}
-                            // Results stay tappable with the keyboard up, and scrolling puts it away
-                            keyboardShouldPersistTaps="handled"
-                            keyboardDismissMode="on-drag"
-                        >
-                            {showingResults ? (
-                                <View style={styles.searchResults}>
-                                    {!search.loading && !search.error && search.results.map((spot) => (
-                                        <SpotSearchResult
-                                            key={`${spot.locationId}-${spot.seatingId ?? 'location'}`}
-                                            spot={spot}
-                                            onPress={(picked) => onOpenSpot(picked.locationId)}
+                <SheetHeaderContext.Provider value={{ header, onLayout: handleHeaderLayout }}>
+                    <BottomSheet
+                        ref={sheet}
+                        index={DEFAULT_SNAP}
+                        snapPoints={snapPoints}
+                        enableDynamicSizing={false}
+                        enablePanDownToClose={false}
+                        topInset={insets.top}
+                        onChange={handleSheetChange}
+                        // Dragging moves the sheet from the header only; the list scrolls first and hands
+                        // off to the sheet at its ends (see SheetScrollArea). While searching, nothing
+                        // moves it, so it stays at full height until Cancel.
+                        handleComponent={SheetHandle}
+                        enableHandlePanningGesture={!searchActive}
+                        enableContentPanningGesture={false}
+                        // Sideways swipes (e.g. on the filter chips) scroll instead of dragging the sheet
+                        activeOffsetY={[-6, 6]}
+                        failOffsetX={[-12, 12]}
+                        keyboardBehavior="extend"
+                        keyboardBlurBehavior="none"
+                        android_keyboardInputMode="adjustResize"
+                        animatedIndex={animatedIndex}
+                        animatedPosition={sheetPosition}
+                        backgroundStyle={styles.sheetBackground}
+                        style={styles.sheetShadow}
+                    >
+                        <Animated.View style={[styles.listArea, listFade]}>
+                            <SheetScrollArea
+                                animatedIndex={animatedIndex}
+                                maxIndex={FULL_SNAP}
+                                sheetDragEnabled={!searchActive}
+                                contentContainerStyle={[styles.list, { paddingBottom: spacing.xl + tabBarOverlap }]}
+                                // Results stay tappable with the keyboard up, and scrolling puts it away
+                                keyboardShouldPersistTaps="handled"
+                                keyboardDismissMode="on-drag"
+                            >
+                                {showingResults ? (
+                                    <View style={styles.searchResults}>
+                                        {!search.loading && !search.error && search.results.map((spot) => (
+                                            <SpotSearchResult
+                                                key={`${spot.locationId}-${spot.seatingId ?? 'location'}`}
+                                                spot={spot}
+                                                onPress={(picked) => onOpenSpot(picked.locationId)}
+                                            />
+                                        ))}
+                                        <SpotSearchStatus
+                                            query={trimmedQuery}
+                                            loading={search.loading}
+                                            error={search.error}
+                                            onRetry={search.retry}
+                                            hasResults={search.results.length > 0}
                                         />
-                                    ))}
-                                    <SpotSearchStatus
-                                        query={trimmedQuery}
-                                        loading={search.loading}
-                                        error={search.error}
-                                        onRetry={search.retry}
-                                        hasResults={search.results.length > 0}
-                                    />
-                                </View>
-                            ) : (
-                                <>
-                                    {/* Filters B-5 can't apply yet */}
-                                    {unsupported.length > 0 && (
-                                        <Text style={styles.notice}>Not applied yet: {unsupported.join(', ')}</Text>
-                                    )}
+                                    </View>
+                                ) : (
+                                    <>
+                                        {/* Filters B-5 can't apply yet */}
+                                        {unsupported.length > 0 && (
+                                            <Text style={styles.notice}>Not applied yet: {unsupported.join(', ')}</Text>
+                                        )}
 
-                                    {/* Results (F-3): ranked SpotCards, with loading, error and empty states */}
-                                    <ExploreSpotList
-                                        spots={spots}
-                                        loading={loading}
-                                        error={error}
-                                        // Only filters B-5 actually applies; unsupported ones don't narrow the list
-                                        filtered={hasActiveFilters(exploreFilters)}
-                                        onOpenSpot={onOpenSpot}
-                                        onRetry={refresh}
-                                        onClearFilters={clearAll}
-                                    />
-                                </>
-                            )}
-                        </BottomSheetScrollView>
-                    </Animated.View>
-                </BottomSheet>
+                                        {/* Results (F-3): ranked SpotCards, with loading, error and empty states */}
+                                        <ExploreSpotList
+                                            spots={spots}
+                                            loading={loading}
+                                            error={error}
+                                            // Only filters B-5 actually applies; unsupported ones don't narrow the list
+                                            filtered={hasActiveFilters(exploreFilters)}
+                                            onOpenSpot={onOpenSpot}
+                                            onRetry={refresh}
+                                            onClearFilters={clearAll}
+                                        />
+                                    </>
+                                )}
+                            </SheetScrollArea>
+                        </Animated.View>
+                    </BottomSheet>
+                </SheetHeaderContext.Provider>
             )}
         </View>
     );
@@ -348,7 +378,16 @@ const styles = StyleSheet.create({
 
     listArea: { flex: 1 },
 
-    handleIndicator: { backgroundColor: colors.textPlaceholder, width: 36 },
+    // Drawn by SheetHandle, matching gorhom's default handle
+    grabber: {
+        alignSelf: 'center',
+        width: 36,
+        height: 4,
+        borderRadius: 2,
+        marginTop: 10,
+        marginBottom: 10,
+        backgroundColor: colors.textPlaceholder,
+    },
 
     // Sheet header: stays put while the list scrolls. Also sets the smallest sheet height.
     header: {
