@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { plural } from './spotFormat'
 import { supabase } from './supabase'
 import { mockDb } from './mocks/profileMocks'
 import { crowdLabels, noiseLabels } from './spot'
@@ -19,9 +20,6 @@ function schoolFromEmail(email: string | null | undefined): string | null {
   return domain ? SCHOOLS_BY_DOMAIN[domain] ?? null : null
 }
 
-function plural(n: number, word: string) {
-  return `${n} ${word}${n === 1 ? '' : 's'}`
-}
 
 // ---------- API ----------
 

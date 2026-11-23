@@ -5,6 +5,11 @@ import { RECENT_MINUTES } from './exploreRanking'
 const METERS_PER_MILE = 1609.344
 
 /** "0.3 mi". With `long`, "0.3 miles" for screen readers. */
+/** "1 photo", "3 photos". Pass `pluralWord` for irregular plurals. */
+export function plural(n: number, word: string, pluralWord = `${word}s`): string {
+  return `${n} ${n === 1 ? word : pluralWord}`
+}
+
 export function formatDistance(meters: number, long = false): string {
   const miles = meters / METERS_PER_MILE
   if (miles < 0.1) return long ? 'less than 0.1 miles' : '< 0.1 mi'

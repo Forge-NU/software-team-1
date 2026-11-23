@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 
 import { getLocation, getSeatingInfo } from '../lib/places';
 import type { SeatingInfo } from '../lib/places';
-import { getRecentPhotos } from '../lib/posts';
+import { deletePost, getRecentPhotos } from '../lib/posts';
 import type { RecentPhoto } from '../lib/posts';
 import { getPostsWithVotes, setVote } from '../lib/votes';
 import type { PostWithVotes, VoteValue } from '../lib/votes';
@@ -100,5 +100,12 @@ export function useSpotDetails(locationId: number) {
     }
   }
 
-  return { location, posts, photos, seating, loading, vote };
+  /** Deletes one of the user's own updates, and its photos from the gallery. */
+  async function removePost(postId: number) {
+    await deletePost(postId);
+    setPosts((current) => current.filter((post) => post.post_id !== postId));
+    setPhotos((current) => current.filter((photo) => photo.post_id !== postId));
+  }
+
+  return { location, posts, photos, seating, loading, vote, removePost };
 }

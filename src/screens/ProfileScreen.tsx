@@ -11,7 +11,10 @@ import {
 } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { useFocusEffect } from 'expo-router'
+import { SwipeToDelete } from '../components/SwipeToDelete'
+import { deletePost } from '../lib/posts'
 import { getMyCheckIns, MAX_NAME_LENGTH, signOut } from '../lib/profile'
+import { plural } from '../lib/spotFormat'
 import type { CheckIn } from '../types/profile'
 import { useProfile } from '../context/ProfileContext'
 import { colors, layout, radius, spacing, typography } from '../theme'
@@ -39,9 +42,6 @@ function formatWhen(iso: string) {
   return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · ${time}`
 }
 
-function plural(n: number, word: string) {
-  return `${n} ${word}${n === 1 ? '' : 's'}`
-}
 
 export default function ProfileScreen({
   onOpenSpot,
@@ -100,6 +100,12 @@ export default function ProfileScreen({
       refreshProfile()
     }, [load, refreshProfile]),
   )
+
+  // The stats line counts checkIns, so it updates too
+  const deleteCheckIn = async (postId: string) => {
+    await deletePost(Number(postId))
+    setCheckIns((current) => current.filter((checkIn) => checkIn.postId !== postId))
+  }
 
   const startEditing = () => {
     setDraftName(profile?.displayName ?? '')
@@ -270,17 +276,19 @@ export default function ProfileScreen({
         onRefresh={() => load({ showSpinner: true })}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => (
-          <Pressable
-            style={[styles.card, styles.updateCard]}
-            onPress={() => onOpenSpot(item.locationId)}
-            accessibilityRole="button"
-          >
-            <Text style={styles.updateSpot}>{item.locationName}</Text>
-            <Text style={styles.updateWhen}>{formatWhen(item.createdAt)}</Text>
-            {item.details.length > 0 && (
-              <Text style={styles.updateDetails}>{item.details.join(' · ')}</Text>
-            )}
-          </Pressable>
+          <SwipeToDelete onDelete={() => deleteCheckIn(item.postId)}>
+            <Pressable
+              style={[styles.card, styles.updateCard]}
+              onPress={() => onOpenSpot(item.locationId)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.updateSpot}>{item.locationName}</Text>
+              <Text style={styles.updateWhen}>{formatWhen(item.createdAt)}</Text>
+              {item.details.length > 0 && (
+                <Text style={styles.updateDetails}>{item.details.join(' · ')}</Text>
+              )}
+            </Pressable>
+          </SwipeToDelete>
         )}
       />
     </View>

@@ -110,3 +110,17 @@ export function formatTimeLimit(minutes: number): string {
 
   return `${minutes} min`;
 }
+
+/** "Today", "Yesterday", a weekday within the last week, then "Mar 3" (local time). */
+export function formatDayLabel(dateString: string, now = new Date()): string {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return 'Earlier';
+
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const daysAgo = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
+
+  if (daysAgo <= 0) return 'Today';
+  if (daysAgo === 1) return 'Yesterday';
+  if (daysAgo < 7) return date.toLocaleDateString(undefined, { weekday: 'long' });
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
