@@ -30,7 +30,7 @@ export function useSpotDetails(locationId: number) {
         ]);
 
       setLocation(locationData);
-      setPosts(postData);
+      setPosts(postData.posts);
       setPhotos(photoData);
       setSeating(seatingData);
     } catch (error) {

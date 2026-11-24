@@ -4,6 +4,7 @@ import { mockDb } from './mocks/profileMocks'
 import { crowdLabels, noiseLabels } from './spot'
 import { AMENITIES, AmenityId } from '../constants/lookups'
 import type { CheckIn, Preferences, Profile } from '../types/profile'
+import { checkPageInput, nextCursorFor, type FeedCursor, type PageOptions } from './posts'
 
 // Set to true to run the Profile and Settings screens against ./mocks/profileMocks instead of Supabase.
 export const USE_MOCK_DATA = false
@@ -75,56 +76,53 @@ export async function updateDisplayName(name: string): Promise<string> {
   return trimmed
 }
 
-interface MyPostRow {
+interface CheckInRow {
   post_id: number
   location_id: number
+  location_name: string
   crowd_level_id: number
   noise_level_id: number | null
   created_at: string
-  location: { name: string } | null
-  post_photo: { count: number }[]
+  photo_count: number
+  vote_score: number
 }
 
-/** The user's own posts, newest first, with vote score and spot name. */
-export async function getMyCheckIns(userId: string): Promise<CheckIn[]> {
-  if (USE_MOCK_DATA) return [...mockDb.checkIns]
+export interface CheckInPage {
+  checkIns: CheckIn[]
+  /** Pass this back as `cursor` to get the next page. Null when there are no more. */
+  nextCursor: FeedCursor | null
+}
 
-  const { data, error } = await supabase
-    .from('post')
-    .select(`
-      post_id, location_id, crowd_level_id, noise_level_id, created_at,
-      location!post_location_id_fkey ( name ),
-      post_photo ( count )
-    `)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+/** One page of the signed-in user's posts, newest first, with vote score and spot name. */
+export async function getMyCheckIns(options: PageOptions = {}): Promise<CheckInPage> {
+  if (USE_MOCK_DATA) return { checkIns: [...mockDb.checkIns], nextCursor: null }
+
+  const limit = options.limit ?? 20
+  const cursor = options.cursor ?? null
+  checkPageInput(limit, cursor)
+
+  const { data, error } = await supabase.rpc('get_my_check_ins', {
+    p_cursor_created_at: cursor?.createdAt ?? null,
+    p_cursor_post_id: cursor?.postId ?? null,
+    p_limit: limit,
+  })
   if (error) throw error
 
-  const rows = (data ?? []) as unknown as MyPostRow[]
-  if (rows.length === 0) return []
+  const rows = (data ?? []) as CheckInRow[]
+  const checkIns = rows.map((row) => ({
+    postId: String(row.post_id),
+    locationId: row.location_id,
+    locationName: row.location_name ?? 'Unknown spot',
+    createdAt: row.created_at,
+    score: row.vote_score ?? 0,
+    details: [
+      crowdLabels[row.crowd_level_id],
+      row.noise_level_id != null ? noiseLabels[row.noise_level_id] : undefined,
+      row.photo_count > 0 ? plural(row.photo_count, 'photo') : undefined,
+    ].filter((d): d is string => Boolean(d)),
+  }))
 
-  const { data: votes, error: votesError } = await supabase
-    .from('post_vote_summary')
-    .select('post_id, vote_score')
-    .in('post_id', rows.map((row) => row.post_id))
-  if (votesError) throw votesError
-  const scores = new Map((votes ?? []).map((v) => [v.post_id as number, v.vote_score as number]))
-
-  return rows.map((row) => {
-    const photos = row.post_photo[0]?.count ?? 0
-    return {
-      postId: String(row.post_id),
-      locationId: row.location_id,
-      locationName: row.location?.name ?? 'Unknown spot',
-      createdAt: row.created_at,
-      score: scores.get(row.post_id) ?? 0,
-      details: [
-        crowdLabels[row.crowd_level_id],
-        row.noise_level_id != null ? noiseLabels[row.noise_level_id] : undefined,
-        photos > 0 ? plural(photos, 'photo') : undefined,
-      ].filter((d): d is string => Boolean(d)),
-    }
-  })
+  return { checkIns, nextCursor: nextCursorFor(rows, limit) }
 }
 
 // ---------- Study preferences (B-7) ----------

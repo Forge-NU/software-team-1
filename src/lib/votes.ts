@@ -1,8 +1,8 @@
 import { supabase } from './supabase'
-import { getPostsForLocation, type Post } from './posts'
+import { getPostsPageForLocation, type Post, type PostPage, type PostPageOptions } from './posts'
 
 /** 0 stands for removing a vote, other two are upvoting or downvoting */
-export type VoteValue = 1 | -1 | 0 
+export type VoteValue = 1 | -1 | 0
 
 export interface VoteSummary {
   upvotes: number
@@ -36,7 +36,10 @@ export async function setVote(postId: number, value: VoteValue): Promise<void> {
   if (error) throw error
 }
 
-/** Vote summaries for every post at a spot: one request, however many posts. */
+/**
+ * Vote summaries for every post at a spot. Spot Detail now gets votes with each page
+ * from getPostsWithVotes, so this is kept only for anything still using it.
+ */
 export async function getVotesForLocation(locationId: number): Promise<Map<number, VoteSummary>> {
   const { data, error } = await supabase
     .from('post_vote_summary')
@@ -49,11 +52,17 @@ export async function getVotesForLocation(locationId: number): Promise<Map<numbe
   return summaries
 }
 
-/** getPostsForLocation plus votes, two requests per spot, none per post */
-export async function getPostsWithVotes(locationId: number): Promise<PostWithVotes[]> {
-  const [posts, votes] = await Promise.all([
-    getPostsForLocation(locationId),
-    getVotesForLocation(locationId),
-  ])
-  return posts.map((post) => ({ ...post, votes: votes.get(post.post_id) ?? EMPTY_VOTES }))
+/**
+ * One page of a spot's posts with their votes, in one request.
+ * Pass `nextCursor` back as `cursor` to load the next page.
+ */
+export async function getPostsWithVotes(
+  locationId: number,
+  options: PostPageOptions = {},
+): Promise<PostPage<PostWithVotes>> {
+  const page = await getPostsPageForLocation(locationId, options)
+  return {
+    posts: page.posts.map(({ vote_row, ...post }) => ({ ...post, votes: voteSummaryFromRow(vote_row) })),
+    nextCursor: page.nextCursor,
+  }
 }

@@ -343,3 +343,119 @@ export async function getCampusFeed(options: FeedOptions = {}): Promise<FeedPage
   const nextCursor = rows.length === limit && last ? { createdAt: last.created_at, postId: last.post_id } : null
   return { posts, nextCursor }
 }
+
+// ---------- Paginated posts at a spot (B-21) ----------
+
+const POSTS_PAGE_SIZE = 20
+
+export interface PageOptions {
+  cursor?: FeedCursor | null
+  /** Items per page, 1 to 100. Defaults to 20. */
+  limit?: number
+}
+
+export interface PostPageOptions extends PostListOptions, PageOptions {}
+
+export interface PostPage<T> {
+  posts: T[]
+  /** Pass this back as `cursor` to get the next page. Null when there are no more. */
+  nextCursor: FeedCursor | null
+}
+
+/** Vote columns for one post, as the database returns them. */
+export interface VoteRow {
+  upvotes: number
+  downvotes: number
+  vote_score: number
+  my_vote: number | null
+}
+
+export type PostWithVoteRow = Post & { vote_row: VoteRow }
+
+interface LocationPostRow extends VoteRow {
+  post_id: number
+  user_id: string
+  location_id: number
+  seating_id: number | null
+  crowd_level_id: number
+  noise_level_id: number | null
+  wifi_mbps: number | null
+  caption: string | null
+  created_at: string
+  author_name: string | null
+  photo_id: number | null
+  photo_path: string | null
+  photo_created_at: string | null
+}
+
+/** Throws on a limit outside 1 to 100 or a half-set cursor, without calling the database. */
+export function checkPageInput(limit: number, cursor: FeedCursor | null): void {
+  if (!Number.isInteger(limit) || limit < 1 || limit > FEED_MAX_PAGE_SIZE) {
+    throw new Error(`Invalid limit: ${limit}. Must be between 1 and ${FEED_MAX_PAGE_SIZE}.`)
+  }
+  if (cursor && (!cursor.createdAt || !Number.isInteger(cursor.postId))) {
+    throw new Error('Invalid cursor: createdAt and postId must be set together.')
+  }
+}
+
+/** A full page means there may be more; a short page means it's the last one. */
+export function nextCursorFor(rows: { created_at: string; post_id: number }[], limit: number): FeedCursor | null {
+  const last = rows[rows.length - 1]
+  return rows.length === limit && last ? { createdAt: last.created_at, postId: last.post_id } : null
+}
+
+/**
+ * One page of posts at a spot, each with its first photo and vote columns, in one request.
+ * Only this page's photos are signed. `recency` and `review` work as in getPostsForLocation.
+ */
+export async function getPostsPageForLocation(
+  locationId: number,
+  options: PostPageOptions = {},
+): Promise<PostPage<PostWithVoteRow>> {
+  const limit = options.limit ?? POSTS_PAGE_SIZE
+  const cursor = options.cursor ?? null
+  checkPageInput(limit, cursor)
+
+  const { data, error } = await supabase.rpc('get_location_posts', {
+    p_location_id: locationId,
+    p_oldest_first: (options.recency ?? 'newest') === 'oldest',
+    p_crowd_level_ids: options.review ? CROWD_BY_REVIEW[options.review] : null,
+    p_cursor_created_at: cursor?.createdAt ?? null,
+    p_cursor_post_id: cursor?.postId ?? null,
+    p_limit: limit,
+  })
+  if (error) throw error
+
+  const rows = (data ?? []) as LocationPostRow[]
+  const urls = await signedUrls(rows.flatMap((row) => (row.photo_path ? [row.photo_path] : [])))
+  const posts = rows.map((row) => ({
+    post_id: row.post_id,
+    user_id: row.user_id,
+    location_id: row.location_id,
+    seating_id: row.seating_id,
+    crowd_level_id: row.crowd_level_id,
+    noise_level_id: row.noise_level_id,
+    wifi_mbps: row.wifi_mbps,
+    caption: row.caption,
+    created_at: row.created_at,
+    author_name: row.author_name ?? '',
+    // Only the first photo, so each page signs one URL per post.
+    photos:
+      row.photo_id != null && row.photo_path
+        ? [{
+            photo_id: row.photo_id,
+            storage_path: row.photo_path,
+            url: urls.get(row.photo_path) ?? '',
+            created_at: row.photo_created_at ?? row.created_at,
+          }]
+        : [],
+    vote_row: {
+      upvotes: row.upvotes,
+      downvotes: row.downvotes,
+      vote_score: row.vote_score,
+      my_vote: row.my_vote,
+    },
+  }))
+
+  return { posts, nextCursor: nextCursorFor(rows, limit) }
+}
