@@ -154,11 +154,11 @@ Pull requests run these checks. The workflow does not use repository secrets and
 npm run test:backend
 npx supabase start
 npx supabase db reset
-npx supabase gen types typescript --local > src/types/database.types.ts
+npx supabase gen types typescript --local --schema public > database.types.ts
 npx tsc --noEmit
 ```
 
 - `npm run test:backend` runs the Deno tests above. They use an in-memory database, so this command does not need Docker.
 - `npx supabase start` followed by `npx supabase db reset` applies every file in `migrations/` to an empty database. A migration that does not apply cleanly, including one that conflicts with an earlier migration, fails the check. Lookup rows already live in migrations, and `config.toml` only warns when `seed.sql` is absent.
-- `npx supabase gen types typescript --local` must match the committed `src/types/database.types.ts`. The check fails when that file is missing or when a schema change is committed without regenerating it.
+- `npx supabase gen types typescript --local --schema public` must match the committed `database.types.ts` at the repo root. The check fails when that file is missing or when a schema change is committed without regenerating it.
 - `npx tsc --noEmit` typechecks the app.
