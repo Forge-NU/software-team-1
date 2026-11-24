@@ -3,19 +3,19 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as ImagePicker from 'expo-image-picker'
 import { Feather } from '@expo/vector-icons'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import type { CheckInPhoto } from '../../lib/checkIn'
-import FlowHeader from '../../components/FlowHeader'
 import Button from '../../components/Button'
+import { useHeaderOverlap } from '../../hooks/useHeaderOverlap'
 import { colors, layout, radius, spacing, typography } from '../../theme'
 
 interface PhotoStepProps {
   spotName: string
   onPhoto: (photo: CheckInPhoto) => void
-  onBack: () => void
-  onCancel: () => void
 }
 
-export default function PhotoStep({ spotName, onPhoto, onBack, onCancel }: PhotoStepProps) {
+export default function PhotoStep({ spotName, onPhoto }: PhotoStepProps) {
+  const headerOverlap = useHeaderOverlap()
   const cameraRef = useRef<CameraView>(null)
   const [permission, requestPermission] = useCameraPermissions()
   const [facing, setFacing] = useState<'back' | 'front'>('back')
@@ -49,9 +49,8 @@ export default function PhotoStep({ spotName, onPhoto, onBack, onCancel }: Photo
   const cameraReady = permission?.granted
 
   return (
-    <View style={styles.screen}>
-      <FlowHeader title="Check in" onBack={onBack} onCancel={onCancel} />
-
+    // Doesn't scroll, so pad below the glass header (iOS 26) and above the tab bar
+    <SafeAreaView style={[styles.screen, { paddingTop: headerOverlap }]} edges={['bottom']}>
       <View style={styles.body}>
         <View style={styles.dots}>
           <View style={[styles.dot, styles.dotActive]} />
@@ -125,7 +124,7 @@ export default function PhotoStep({ spotName, onPhoto, onBack, onCancel }: Photo
         </Pressable>
       </View>
       <Text style={styles.caption}>Tap the shutter to take your check-in photo.</Text>
-    </View>
+    </SafeAreaView>
   )
 }
 

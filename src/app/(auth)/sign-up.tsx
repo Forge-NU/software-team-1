@@ -7,6 +7,7 @@ import { AuthScaffold } from '@/components/AuthScaffold';
 import { FormMessage } from '@/components/FormMessage';
 import { Button, FormTextField } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
+import { clearPreferencesPending, markPreferencesPending } from '@/lib/onboarding';
 import { MIN_PASSWORD_LENGTH, signUpSchema, type SignUpValues } from '@/lib/validation/auth';
 
 /** Figma "Sign Up/In" frame */
@@ -30,8 +31,12 @@ export default function SignUpScreen() {
 
   const onSubmit = handleSubmit(async (values) => {
     setMessage(null);
+    // New users get Study preferences once they're in, now or after confirming their email.
+    // Set before signing up: a successful sign-up can open the tabs before this line would run.
+    await markPreferencesPending();
     const { error, needsEmailConfirmation } = await signUp(values);
     if (error) {
+      await clearPreferencesPending();
       setMessage({ text: error, tone: 'error' });
     } else if (needsEmailConfirmation) {
       resetField('password');

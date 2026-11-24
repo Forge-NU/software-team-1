@@ -39,7 +39,20 @@ export const PRICE_RANGES = {
   4: '$$$$',
 } as const;
 
+// Study preference amenities. Must match the check on user_preferences.preferred_amenities in
+// supabase/migrations/20261104120000_study_preferences.sql; there's no lookup table for these.
+export const AMENITIES = {
+  outlets: 'Outlets',
+  wifi: 'Wi-Fi',
+  whiteboards: 'Whiteboards',
+  food_drinks: 'Food & drinks',
+} as const;
+
+/** Onboarding's "Preferred atmosphere", as noise level ids (Quiet and Loud). */
+export const ATMOSPHERE_NOISE_LEVEL = { quiet: 2, social: 4 } as const satisfies Record<string, NoiseLevelId>;
+
 export type CrowdLevelId = keyof typeof CROWD_LEVELS;
+export type AmenityId = keyof typeof AMENITIES;
 export type NoiseLevelId = keyof typeof NOISE_LEVELS;
 export type OutletLevelId = keyof typeof OUTLET_LEVELS;
 export type PhonePolicyId = keyof typeof PHONE_POLICIES;

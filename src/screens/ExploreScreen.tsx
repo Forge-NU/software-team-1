@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react';
+
+import { Feather } from '@expo/vector-icons';
 import {
-    ActivityIndicator,
-    FlatList,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -12,166 +10,78 @@ import {
 
 import { colors, spacing, radius, typography, layout } from '../theme';
 
+import { ExploreSpotList } from '../components/ExploreSpotList';
+import MapViewComponent from '../components/MapView';
+import { EXPLORE_SORT } from '../constants/explore';
+
 import { getUnsupportedLabels, useFilters } from '../context/FiltersContext';
+import { hasActiveFilters, useExploreSpots } from '../hooks/useExploreSpots';
 import { toExploreFilters } from '../lib/filterAdapter';
-import { getExploreSpots, NU_CAMPUS } from '../lib/exploreSource';
-import type { ExploreSpot } from '../lib/explore';
+import { NU_CAMPUS } from '../lib/exploreSource';
 
 type ExploreScreenProps = {
     onOpenFilters?: () => void;
-    onOpenSpot?: (locationId: number) => void;
+    onOpenSearch?: () => void;
+    onOpenSpot: (locationId: number) => void;
     latitude?: number;
     longitude?: number;
 };
 
-// Readable names for database location types
-const typeLabels: Record<string, string> = {
-    library: 'Library',
-    cafe: 'Café',
-    campus_building: 'Campus building',
-    coworking: 'Coworking',
-    restaurant: 'Restaurant',
-    park: 'Park',
-    other: 'Other',
-};
-
-// Roughly 80 meters per minute of walking
-function walkTime(meters: number): string {
-    const minutes = Math.max(1, Math.round(meters / 80));
-    return `${minutes} min walk`;
-}
-
-function updatedAgo(iso: string | null): string {
-    if (!iso) return 'No updates yet';
-    const minutes = Math.round((Date.now() - Date.parse(iso)) / 60_000);
-    if (minutes < 1) return 'Updated just now';
-    if (minutes < 60) return `Updated ${minutes} min ago`;
-    const hours = Math.round(minutes / 60);
-    if (hours < 24) return `Updated ${hours} h ago`;
-    const days = Math.round(hours / 24);
-    return `Updated ${days} ${days === 1 ? 'day' : 'days'} ago`;
-}
+/** Height of the map on the Explore screen, from the Figma */
+const MAP_HEIGHT = 220;
 
 export default function ExploreScreen({
     onOpenFilters,
     onOpenSpot,
+    onOpenSearch,
     latitude = NU_CAMPUS.latitude,
     longitude = NU_CAMPUS.longitude,
 }: ExploreScreenProps) {
     // Shared filters: the same ones the Filters screen edits
     const { filters, activeChips, removeChip, clearAll } = useFilters();
-
-    const [spots, setSpots] = useState<ExploreSpot[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
+    const exploreFilters = toExploreFilters(filters);
     const unsupported = getUnsupportedLabels(filters);
 
-    // Reloads results whenever filters change (including chip removal)
-    useEffect(() => {
-        let cancelled = false;
-
-        setLoading(true);
-        setError(null);
-
-        getExploreSpots({
-            latitude,
-            longitude,
-            filters: toExploreFilters(filters),
-        })
-            .then((results) => {
-                if (!cancelled) setSpots(results);
-            })
-            .catch((err) => {
-                console.error('Explore: failed to load spots', err);
-                if (!cancelled) {
-                    setSpots([]);
-                    setError('Spots could not be loaded. Check your connection and try again.');
-                }
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [filters, latitude, longitude]);
-
-    // Each card opens that spot's detail page when tapped
-    const renderSpot = ({ item }: { item: ExploreSpot }) => (
-        <TouchableOpacity
-            style={styles.card}
-            onPress={() => onOpenSpot?.(item.location_id)}
-            accessibilityRole="link"
-            accessibilityLabel={`Open ${item.name}`}
-        >
-            <Text style={styles.cardTitle}>{item.name}</Text>
-            <Text style={styles.cardMeta}>
-                {typeLabels[item.location_type] ?? item.location_type}, {walkTime(item.distance_meters)}
-            </Text>
-
-            {item.is_current ? (
-                <Text style={styles.cardStatus}>
-                    {item.crowd_level}
-                    {item.noise_level ? `, ${item.noise_level.toLowerCase()}` : ''}
-                </Text>
-            ) : (
-                <Text style={styles.cardStale}>No recent updates</Text>
-            )}
-
-            <Text style={styles.cardUpdated}>{updatedAgo(item.last_updated_at)}</Text>
-        </TouchableOpacity>
-    );
-
-    const renderEmpty = () => {
-        if (loading) return null;
-
-        if (error) {
-            return <Text style={styles.warning}>{error}</Text>;
-        }
-
-        if (activeChips.length > 0) {
-            return (
-                <View style={styles.empty}>
-                    <Text style={styles.emptyTitle}>No spots match these filters</Text>
-                    <Text style={styles.emptyText}>
-                        Remove a filter above, or clear them all to see every spot nearby.
-                    </Text>
-                    <TouchableOpacity
-                        style={styles.emptyButton}
-                        onPress={clearAll}
-                        accessibilityRole="button"
-                    >
-                        <Text style={styles.emptyButtonText}>Clear filters</Text>
-                    </TouchableOpacity>
-                </View>
-            );
-        }
-
-        return (
-            <View style={styles.empty}>
-                <Text style={styles.emptyTitle}>No spots nearby yet</Text>
-                <Text style={styles.emptyText}>
-                    Spots appear here once they're added to Spotted.
-                </Text>
-            </View>
-        );
-    };
+    // One fetch for the whole screen: the map and the list both render these `spots`.
+    // Refetches when filters change (including chip removal).
+    const { spots, loading, error, refresh } = useExploreSpots({
+        filters: exploreFilters,
+        sort: EXPLORE_SORT,
+        latitude,
+        longitude,
+    });
 
     return (
-        <SafeAreaView style={styles.container}>
+        // One scroll for the whole page (search, map, chips, results). The tab's native header
+        // shows the title, and iOS insets the content for the glass header and tab bar, so it
+        // starts below the header and the last card can still scroll clear of the tab bar
+        <ScrollView style={styles.container} contentInsetAdjustmentBehavior="automatic">
+            {/* F-11: Search bar */}
+            <TouchableOpacity
+                style={styles.searchButton}
+                onPress={onOpenSearch}
+                accessibilityRole="button"
+                accessibilityLabel="Search spots or buildings"
+            >
+                <Feather
+                    name="search"
+                    size={20}
+                    color={colors.textSecondary}
+                />
 
-            {/* Header */}
-            <View style={styles.header}>
-                <Text style={styles.logo}>Spotted</Text>
+                <Text style={styles.searchPlaceholder}>
+                    Search spots or buildings
+                </Text>
+            </TouchableOpacity>
+
+            {/* Map of the spots matching the current filters */}
+            <View style={styles.mapArea}>
+                <MapViewComponent
+                    height={MAP_HEIGHT}
+                    locations={spots}
+                    onLocationPress={(spot) => onOpenSpot(spot.location_id)}
+                />
             </View>
-
-            {/* Map area: F-2 replaces this with the map */}
-            <View style={styles.mapPlaceholder}>
-                <Text style={styles.mapPlaceholderText}>Map</Text>
-            </View>
-
             {/* Filters button and active filter chips */}
             <ScrollView
                 horizontal
@@ -185,7 +95,10 @@ export default function ExploreScreen({
                     accessibilityRole="button"
                 >
                     <Text style={styles.filtersButtonText}>
-                        Filters{activeChips.length > 0 ? ` (${activeChips.length})` : ''}
+                        Filters
+                        {activeChips.length > 0
+                            ? ` (${activeChips.length})`
+                            : ''}
                     </Text>
                 </TouchableOpacity>
 
@@ -197,7 +110,9 @@ export default function ExploreScreen({
                         accessibilityRole="button"
                         accessibilityLabel={`Remove ${chip.label} filter`}
                     >
-                        <Text style={styles.activeChipText}>✓ {chip.label} ×</Text>
+                        <Text style={styles.activeChipText}>
+                            ✓ {chip.label} ×
+                        </Text>
                     </TouchableOpacity>
                 ))}
 
@@ -207,7 +122,9 @@ export default function ExploreScreen({
                         onPress={clearAll}
                         accessibilityRole="button"
                     >
-                        <Text style={styles.clearButtonText}>Clear all</Text>
+                        <Text style={styles.clearButtonText}>
+                            Clear all
+                        </Text>
                     </TouchableOpacity>
                 )}
             </ScrollView>
@@ -219,45 +136,68 @@ export default function ExploreScreen({
                 </Text>
             )}
 
-            {loading && (
-                <ActivityIndicator color={colors.primaryDark} style={styles.spinner} />
-            )}
-
-            {/* Results */}
-            <FlatList
-                data={loading ? [] : spots}
-                keyExtractor={(item) => String(item.location_id)}
-                renderItem={renderSpot}
-                ListEmptyComponent={renderEmpty}
-                contentContainerStyle={styles.list}
-            />
-        </SafeAreaView>
+            {/* Results (F-3): ranked SpotCards, with loading, error and empty states */}
+            <View style={styles.list}>
+                <ExploreSpotList
+                    spots={spots}
+                    loading={loading}
+                    error={error}
+                    // Only filters B-5 actually applies; unsupported ones don't narrow the list
+                    filtered={hasActiveFilters(exploreFilters)}
+                    onOpenSpot={onOpenSpot}
+                    onRetry={refresh}
+                    onClearFilters={clearAll}
+                />
+            </View>
+        </ScrollView>
     );
 }
 
 // Styles using Spotted's shared theme
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: {
+        flex: 1,
+        backgroundColor: colors.background,
+    },
 
-    header: {
-        height: layout.headerHeight,
+    // F-11 search styles
+    searchButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
         backgroundColor: colors.surface,
-        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: radius.pill,
+        marginHorizontal: layout.screenPaddingHorizontal,
+        marginTop: spacing.md,
+        marginBottom: spacing.md,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        minHeight: 48,
+    },
+
+    searchPlaceholder: {
+        ...typography.body,
+        color: colors.textSecondary,
+    },
+
+    mapArea: {
         paddingHorizontal: layout.screenPaddingHorizontal,
+        paddingTop: spacing.md,
+    },
+
+    mapPlaceholderText: {
+        ...typography.caption,
+        color: colors.textSecondary,
+    },
+
+    chipRow: {
+        flexGrow: 0,
         borderBottomWidth: 1,
         borderBottomColor: colors.border,
     },
-    logo: { ...typography.bodyStrong, color: colors.primary },
 
-    mapPlaceholder: {
-        height: 220,
-        backgroundColor: colors.primaryLight,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    mapPlaceholderText: { ...typography.caption, color: colors.textSecondary },
-
-    chipRow: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
     chipRowContent: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -274,7 +214,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.xs,
     },
-    filtersButtonText: { ...typography.captionStrong, color: colors.textPrimary },
+
+    filtersButtonText: {
+        ...typography.captionStrong,
+        color: colors.textPrimary,
+    },
 
     activeChip: {
         borderRadius: radius.pill,
@@ -284,10 +228,21 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.primary,
     },
-    activeChipText: { ...typography.tag, color: colors.textOnPrimaryLight },
 
-    clearButton: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-    clearButtonText: { ...typography.captionStrong, color: colors.primaryDark },
+    activeChipText: {
+        ...typography.tag,
+        color: colors.textOnPrimaryLight,
+    },
+
+    clearButton: {
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xs,
+    },
+
+    clearButtonText: {
+        ...typography.captionStrong,
+        color: colors.primaryDark,
+    },
 
     notice: {
         ...typography.caption,
@@ -296,44 +251,6 @@ const styles = StyleSheet.create({
         paddingTop: spacing.sm,
     },
 
-    spinner: { marginTop: spacing.lg },
-
-    list: { padding: layout.screenPaddingHorizontal, gap: spacing.sm, flexGrow: 1 },
-
-    card: {
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radius.lg,
-        padding: spacing.md,
-    },
-    cardTitle: { ...typography.bodyStrong, color: colors.textPrimary },
-    cardMeta: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs },
-    cardStatus: { ...typography.bodySmall, color: colors.textPrimary, marginTop: spacing.sm },
-    cardStale: { ...typography.bodySmall, color: colors.textSecondary, marginTop: spacing.sm },
-    cardUpdated: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs },
-
-    empty: { alignItems: 'center', paddingVertical: spacing.xl, paddingHorizontal: spacing.lg },
-    emptyTitle: { ...typography.bodyStrong, color: colors.textPrimary, textAlign: 'center' },
-    emptyText: {
-        ...typography.bodySmall,
-        color: colors.textSecondary,
-        textAlign: 'center',
-        marginTop: spacing.xs,
-    },
-    emptyButton: {
-        marginTop: spacing.md,
-        backgroundColor: colors.primary,
-        borderRadius: radius.lg,
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.sm,
-    },
-    emptyButtonText: { ...typography.bodyStrong, color: colors.textPrimary },
-
-    warning: {
-        ...typography.caption,
-        color: colors.danger,
-        textAlign: 'center',
-        paddingVertical: spacing.lg,
-    },
+    // No flexGrow: iOS adds the header and tab bar insets on top, so a short page would scroll
+    list: { padding: layout.screenPaddingHorizontal },
 });

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,8 +10,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Stack } from 'expo-router';
 
-import TopBar from '../components/TopBar';
 import { formatTimeAgo } from '../lib/formatTime';
 import { getLocation } from '../lib/places';
 import { getRecentPhotos } from '../lib/posts';
@@ -80,15 +81,16 @@ export default function PhotoGalleryScreen({
 
   return (
     <View style={styles.container}>
-      <TopBar
-        title="Recent photos"
-        right={
-          <Text style={styles.counter}>
-            {photos.length > 0
-              ? `${currentIndex + 1} of ${photos.length}`
-              : '0 photos'}
-          </Text>
-        }
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <Text style={styles.counter}>
+              {photos.length > 0
+                ? `${currentIndex + 1} of ${photos.length}`
+                : '0 photos'}
+            </Text>
+          ),
+        }}
       />
 
       {loading ? (
@@ -124,9 +126,12 @@ export default function PhotoGalleryScreen({
         <ScrollView
           contentContainerStyle={[
             styles.content,
-            { paddingBottom: styles.content.paddingBottom + bottom },
+            // iOS adds the home indicator inset itself (contentInsetAdjustmentBehavior)
+            { paddingBottom: styles.content.paddingBottom + (Platform.OS === 'ios' ? 0 : bottom) },
           ]}
           showsVerticalScrollIndicator={false}
+          // Starts below the glass header (iOS 26) but scrolls up under it
+          contentInsetAdjustmentBehavior="automatic"
         >
           {/* Location and photo details */}
           <View style={styles.headingSection}>

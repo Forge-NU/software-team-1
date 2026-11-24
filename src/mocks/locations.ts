@@ -116,4 +116,26 @@ export const mockLocations: Location[] = [
     },
     day_hours: hours('08:00', '24:00'),
   },
+  {
+    // No posts at all, for testing the "no updates yet" state
+    location_id: 6,
+    google_place_id: null,
+    osm_type: null,
+    osm_id: null,
+    name: 'Curry Student Center',
+    latitude: 42.3393,
+    longitude: -71.0874,
+    location_type: 'student_center',
+    campus: 'Northeastern University',
+    price_range_id: 0,
+    address: {
+      street_one: '346 Huntington Ave',
+      street_two: null,
+      city: 'Boston',
+      region: 'MA',
+      postal_code: '02115',
+      country_code: 'US',
+    },
+    day_hours: hours('07:00', '24:00', [...weekdays, 'Saturday', 'Sunday']),
+  },
 ];

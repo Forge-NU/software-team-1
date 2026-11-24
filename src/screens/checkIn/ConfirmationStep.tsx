@@ -2,7 +2,6 @@ import React from 'react'
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Feather } from '@expo/vector-icons'
 import { crowdingLabel, noiseLabel, PostedCheckIn } from '../../lib/checkIn'
-import TopBar from '../../components/TopBar'
 import Badge from '../../components/Badge'
 import Button from '../../components/Button'
 import { colors, layout, radius, spacing, typography } from '../../theme'
@@ -28,8 +27,8 @@ export default function ConfirmationStep({
 
   return (
     <View style={styles.screen}>
-      <TopBar title="Update posted" />
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* Starts below the glass header (iOS 26) but scrolls up under it */}
+      <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
         <View style={[styles.card, styles.hero]}>
           <View style={styles.checkOuter}>
             <View style={styles.checkInner}>

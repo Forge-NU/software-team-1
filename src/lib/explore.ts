@@ -18,7 +18,7 @@ const SIGNED_URL_SECONDS = 60 * 60
 // The most nearby_locations allows. Ranking needs every spot in the radius, not just the first page.
 const NEARBY_PAGE_SIZE = 100
 
-const EXPLORE_SELECT = `
+export const EXPLORE_SELECT = `
   location_id, name, location_type, campus, price_range_id, latitude, longitude,
   address ( street_one, city ),
   area ( noise_policy ),

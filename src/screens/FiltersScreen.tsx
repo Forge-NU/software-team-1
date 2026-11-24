@@ -2,13 +2,14 @@
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Stack } from 'expo-router';
 
 import {
     colors,
@@ -125,6 +126,8 @@ export default function FiltersScreen({
     longitude,
     radiusMeters = 2000,
 }: FiltersScreenProps) {
+    // The footer pads the home indicator; the native header covers the top
+    const { bottom } = useSafeAreaInsets();
 
     // Stores the currently selected options
     const [filters, setFilters] = useState<Filters>(() => ({
@@ -366,37 +369,28 @@ export default function FiltersScreen({
     }
 
     return (
-        <SafeAreaView style={styles.container}>
-
-            {/* Header */}
-            <View style={styles.header}>
-                <View style={styles.headerSide}>
-                    <Text style={styles.logo}>
-                        Spotted
-                    </Text>
-                </View>
-
-                <Text style={styles.headerTitle}>
-                    Filters
-                </Text>
-
-                <View style={styles.headerSideRight}>
-                    <TouchableOpacity
-                        style={styles.resetButton}
-                        onPress={resetFilters}
-                    >
-                        <Text style={styles.resetText}>
-                            Reset
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
+        <View style={styles.container}>
+            <Stack.Screen
+                options={{
+                    headerRight: () => (
+                        <TouchableOpacity
+                            onPress={resetFilters}
+                            hitSlop={12}
+                            accessibilityRole="button"
+                        >
+                            <Text style={styles.resetText}>Reset</Text>
+                        </TouchableOpacity>
+                    ),
+                }}
+            />
 
             {/* Main filter options */}
             <ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={styles.content}
                 keyboardShouldPersistTaps="handled"
+                // Starts below the glass header (iOS 26) but scrolls up under it
+                contentInsetAdjustmentBehavior="automatic"
             >
                 <Text style={styles.title}>
                     Make your break count.
@@ -491,7 +485,7 @@ export default function FiltersScreen({
             </ScrollView>
 
             {/* Selected filters and results */}
-            <View style={styles.footer}>
+            <View style={[styles.footer, { paddingBottom: spacing.lg + bottom }]}>
                 <Text style={styles.activeTitle}>
                     Active filters ({activeCount})
                 </Text>
@@ -596,7 +590,7 @@ export default function FiltersScreen({
                     </Text>
                 </TouchableOpacity>
             </View>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -606,48 +600,9 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
     },
 
-    header: {
-        height: layout.headerHeight,
-        backgroundColor: colors.surface,
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: layout.screenPaddingHorizontal,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-
-    headerSide: {
-        width: 82,
-    },
-
-    headerSideRight: {
-        width: 82,
-        alignItems: 'flex-end',
-    },
-
-    logo: {
-        ...typography.bodyStrong,
-        color: colors.primary,
-    },
-
-    headerTitle: {
-        ...typography.header,
-        flex: 1,
-        textAlign: 'center',
-        color: colors.textPrimary,
-    },
-
-    resetButton: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radius.pill,
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.xs,
-    },
-
     resetText: {
-        ...typography.captionStrong,
-        color: colors.textPrimary,
+        ...typography.bodyStrong,
+        color: colors.primaryDark,
     },
 
     scrollView: {

@@ -8,12 +8,14 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Stack } from 'expo-router';
 
 import AmenitiesCard from '../components/spot/AmenitiesCard';
 import PhotoStrip from '../components/spot/PhotoStrip';
 import RecentUpdates from '../components/spot/RecentUpdates';
+import SaveButton from '../components/spot/SaveButton';
 import StatusBox from '../components/spot/StatusBox';
-import TopBar from '../components/TopBar';
+import { useSpotBookmark } from '../hooks/useSpotBookmark';
 import { useSpotDetails } from '../hooks/useSpotDetails';
 import { formatFloor, getAmenities, outletLevelForPost } from '../lib/spot';
 import type { Location } from '../types/location';
@@ -23,7 +25,8 @@ interface SpotDetailScreenProps {
   locationId: number;
   onBack: () => void;
   onSeeAllPhotos: (locationId: number) => void;
-  onCheckIn: (locationId: number) => void;
+  /** Gets the spot's name too, so the check-in can show it without loading the spot again. */
+  onCheckIn: (locationId: number, name: string) => void;
   onGetDirections: (location: Location) => void;
   walkMinutes?: number;
 }
@@ -38,6 +41,7 @@ export default function SpotDetailScreen({
 }: SpotDetailScreenProps) {
   const { location, posts, photos, seating, loading, vote } =
     useSpotDetails(locationId);
+  const { saved, toggle: toggleSaved } = useSpotBookmark(locationId);
   const { bottom } = useSafeAreaInsets();
 
   if (loading) {
@@ -86,23 +90,17 @@ export default function SpotDetailScreen({
 
   return (
     <View style={styles.container}>
-      <TopBar
-        title="Spot detail"
-        right={
-          // Bookmarking is not wired up yet, so this is a static button.
-          <Pressable
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Save spot"
-          >
-            <Text style={styles.saveText}>Save</Text>
-          </Pressable>
-        }
+      <Stack.Screen
+        options={{
+          headerRight: () => <SaveButton saved={saved} onPress={toggleSaved} />,
+        }}
       />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        // Starts below the glass header (iOS 26) but scrolls up under it
+        contentInsetAdjustmentBehavior="automatic"
       >
         <View style={styles.header}>
           <Text style={styles.spotName}>
@@ -145,7 +143,7 @@ export default function SpotDetailScreen({
         ]}
       >
         <Pressable
-          onPress={() => onCheckIn(locationId)}
+          onPress={() => onCheckIn(locationId, location.name)}
           style={styles.checkInButton}
         >
           <Text style={styles.checkInText}>
@@ -199,10 +197,6 @@ const styles = StyleSheet.create({
   loadingText: {
     ...typography.body,
     marginTop: spacing.md,
-    color: colors.textSecondary,
-  },
-  saveText: {
-    ...typography.bodySmall,
     color: colors.textSecondary,
   },
   scrollContent: {

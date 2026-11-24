@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useForm } from 'react-hook-form';
@@ -9,7 +10,7 @@ import { Button, FormTextField } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 import { signInSchema, type SignInValues } from '@/lib/validation/auth';
 
-/** No Figma frame for sign in yet, so it mirrors "Sign Up/In". */
+// sign in uses the same layout as sign up
 export default function SignInScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
@@ -28,9 +29,11 @@ export default function SignInScreen() {
 
   const onSubmit = handleSubmit(async ({ email, password }) => {
     setError(null);
+
     const result = await signIn(email, password);
     setError(result.error);
-    // On success the auth gate in app/_layout.tsx opens the tabs
+
+    // auth gate opens the tabs after signing in
   });
 
   return (
@@ -41,8 +44,25 @@ export default function SignInScreen() {
       actions={
         <>
           <FormMessage message={error} tone="error" />
-          <Button label="Sign in" onPress={onSubmit} loading={isSubmitting} />
-          <Button label="Create an account" variant="secondary" onPress={() => router.replace('/sign-up')} />
+
+          <Button
+            label="Sign in"
+            onPress={onSubmit}
+            loading={isSubmitting}
+          />
+
+          {/* takes user to forgot password screen */}
+          <Button
+            label="Forgot Password?"
+            variant="secondary"
+            onPress={() => router.push('/forgot-password')}
+          />
+
+          <Button
+            label="Create an account"
+            variant="secondary"
+            onPress={() => router.replace('/sign-up')}
+          />
         </>
       }
     >
@@ -60,6 +80,7 @@ export default function SignInScreen() {
         submitBehavior="submit"
         onSubmitEditing={() => setFocus('password')}
       />
+
       <FormTextField
         control={control}
         name="password"
