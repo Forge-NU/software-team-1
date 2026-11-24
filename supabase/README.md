@@ -58,7 +58,7 @@ Then regenerate the types (below) and commit them with the migration.
 
 ### Users
 
-`public.users` is the only identity table. `handle_new_user()` creates one row per sign-up, with `name` taken from the sign-up metadata's `name` key (falling back to the part of the email before the @). Every other table that belongs to a user references `public.users`, and author names come from `users.name`.
+`public.users` is the only identity table. `handle_new_user()` creates one row per sign-up, with `name` taken from the sign-up metadata's `name` key (falling back to the neutral name Student). Every other table that belongs to a user references `public.users`, and author names come from `users.name`.
 
 ### Generated types
 
