@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -13,8 +13,10 @@ import { Stack } from 'expo-router';
 import AmenitiesCard from '../components/spot/AmenitiesCard';
 import PhotoStrip from '../components/spot/PhotoStrip';
 import RecentUpdates from '../components/spot/RecentUpdates';
+import ReportPostSheet from '../components/spot/ReportPostSheet';
 import SaveButton from '../components/spot/SaveButton';
 import StatusBox from '../components/spot/StatusBox';
+import { useAuth } from '../context/AuthContext';
 import { useSpotBookmark } from '../hooks/useSpotBookmark';
 import { useSpotDetails } from '../hooks/useSpotDetails';
 import { formatFloor, getAmenities, outletLevelForPost } from '../lib/spot';
@@ -39,10 +41,12 @@ export default function SpotDetailScreen({
   onGetDirections,
   walkMinutes,
 }: SpotDetailScreenProps) {
-  const { location, posts, photos, seating, loading, vote } =
+  const { location, posts, photos, seating, loading, vote, report } =
     useSpotDetails(locationId);
   const { saved, toggle: toggleSaved } = useSpotBookmark(locationId);
+  const { session } = useAuth();
   const { bottom } = useSafeAreaInsets();
+  const [reportingPostId, setReportingPostId] = useState<number | null>(null);
 
   if (loading) {
     return (
@@ -132,8 +136,16 @@ export default function SpotDetailScreen({
           posts={posts}
           seating={seating}
           onVote={vote}
+          onReport={setReportingPostId}
+          myUserId={session?.user.id}
         />
       </ScrollView>
+
+      <ReportPostSheet
+        postId={reportingPostId}
+        onSubmit={report}
+        onClose={() => setReportingPostId(null)}
+      />
 
       {/* Main actions */}
       <View
