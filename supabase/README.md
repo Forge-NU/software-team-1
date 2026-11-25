@@ -12,6 +12,7 @@ supabase/
   tests/
     database/          schema tests against the real migrations
     delete-account/    delete-account Edge Function handler tests
+    cleanup-orphaned-photos/  cleanup-orphaned-photos Edge Function handler tests
     osm/               OpenStreetMap importer tests
     lib/               app client (src/lib) tests
 ```
@@ -104,6 +105,31 @@ The function:
 npx supabase functions serve delete-account   # local; CLI injects URL, anon, and service role
 npx supabase functions deploy delete-account  # hosted; service role is already a project secret
 ```
+
+## Orphaned photo cleanup (`cleanup-orphaned-photos`)
+
+Photo files can outlive their rows: deleting a location cascades to `post` and `post_photo` but not to the files, and an upload can be left behind if the app is killed before `create_post` runs. Once a day, the `cleanup-orphaned-photos` Edge Function removes files in `post-photos` and `review-photos` that have no `post_photo` / `review_photo` row and are **older than 24 hours** (so uploads still in progress are never touched).
+
+- `public.orphaned_photos()` finds the files (service role only, up to 1000 per run). The function removes them through the Storage API in batches of 100.
+- It's called with `Authorization: Bearer <CRON_SECRET>`, not a user JWT (`verify_jwt = false` in `config.toml`).
+- `{"dryRun": true}` (or an empty body) only lists what it would remove. `{"dryRun": false}` removes them. Both log the counts per bucket.
+
+Setup on the hosted project (once):
+
+```bash
+openssl rand -hex 32                                            # make a secret
+npx supabase secrets set CRON_SECRET=<that secret>
+npx supabase functions deploy cleanup-orphaned-photos
+```
+
+Check what it would remove before scheduling it:
+
+```bash
+curl -X POST https://<project-ref>.supabase.co/functions/v1/cleanup-orphaned-photos \
+  -H "Authorization: Bearer <CRON_SECRET>" -d '{"dryRun": true}'
+```
+
+Then schedule it in the dashboard under **Integrations → Cron → Create job**: type **Supabase Edge Function**, `cleanup-orphaned-photos`, method `POST`, schedule `0 8 * * *` (daily, 3–4am Boston), header `Authorization: Bearer <CRON_SECRET>`, body `{"dryRun": false}`. Runs and their logs show under the job's history and the function's logs. The secret lives only in the function's secrets and the cron job, never in the repo or the app.
 
 ## Importing places from OpenStreetMap
 

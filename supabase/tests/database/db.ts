@@ -42,6 +42,7 @@ const SUPABASE_STUBS = `
     id uuid primary key default gen_random_uuid(),
     bucket_id text not null references storage.buckets (id),
     name text not null,
+    created_at timestamptz not null default now(),
     unique (bucket_id, name)
   );
   grant select on storage.buckets to anon, authenticated;
