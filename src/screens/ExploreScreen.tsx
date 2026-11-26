@@ -1,18 +1,35 @@
-
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Feather } from '@expo/vector-icons';
 import {
+    BackHandler,
+    Keyboard,
     Platform,
+    Pressable,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
+    type LayoutChangeEvent,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import BottomSheet, { BottomSheetTextInput } from '@gorhom/bottom-sheet';
+import { useFocusEffect } from 'expo-router';
+import Animated, {
+    Extrapolation,
+    interpolate,
+    useAnimatedStyle,
+    useDerivedValue,
+    useSharedValue,
+} from 'react-native-reanimated';
 
 import { colors, spacing, radius, typography, layout } from '../theme';
 
 import { ExploreSpotList } from '../components/ExploreSpotList';
 import MapViewComponent from '../components/MapView';
+import SheetFilterButton from '../components/SheetFilterButton';
+import SheetScrollArea from '../components/SheetScrollArea';
+import { SpotSearchResult, SpotSearchStatus, useSpotSearch } from '../components/SpotSearch';
 import { EXPLORE_SORT } from '../constants/explore';
 
 import { getUnsupportedLabels, useFilters } from '../context/FiltersContext';
@@ -21,18 +38,35 @@ import { toExploreFilters } from '../lib/filterAdapter';
 import { NU_CAMPUS } from '../lib/exploreSource';
 
 type ExploreScreenProps = {
-    onOpenSearch?: () => void;
+    onOpenFilters: () => void;
     onOpenSpot: (locationId: number) => void;
     latitude?: number;
     longitude?: number;
 };
 
-/** Height of the map on the Explore screen, from the Figma */
-const MAP_HEIGHT = 220;
+const DEFAULT_SNAP = 1;
+const FULL_SNAP = 2;
+
+/**
+ * The header is gorhom's handle, so dragging anywhere on it moves the sheet. The handle component
+ * must stay the same between renders (a new one drops the search field's focus), so the header
+ * comes from context.
+ */
+const SheetHeaderContext = createContext<{ header: ReactNode; onLayout: (e: LayoutChangeEvent) => void } | null>(null);
+
+function SheetHandle() {
+    const value = useContext(SheetHeaderContext);
+    return (
+        <View onLayout={value?.onLayout}>
+            <View style={styles.grabber} />
+            {value?.header}
+        </View>
+    );
+}
 
 export default function ExploreScreen({
     onOpenSpot,
-    onOpenSearch,
+    onOpenFilters,
     latitude = NU_CAMPUS.latitude,
     longitude = NU_CAMPUS.longitude,
 }: ExploreScreenProps) {
@@ -50,38 +84,144 @@ export default function ExploreScreen({
         longitude,
     });
 
-    return (
-        // One scroll for the whole page (search, map, chips, results). The tab's native header
-        // shows the title, and iOS insets the content for the glass header and tab bar, so it
-        // starts below the header and the last card can still scroll clear of the tab bar
-        <ScrollView style={styles.container} contentInsetAdjustmentBehavior="automatic">
-            {/* F-11: Search bar */}
-            <TouchableOpacity
-                style={styles.searchButton}
-                onPress={onOpenSearch}
-                accessibilityRole="button"
-                accessibilityLabel="Search spots or buildings"
-            >
-                <Feather
-                    name="search"
-                    size={20}
-                    color={colors.textSecondary}
-                />
+    const insets = useSafeAreaInsets();
+    const sheet = useRef<BottomSheet>(null);
+    const snapIndex = useRef(DEFAULT_SNAP);
 
-                <Text style={styles.searchPlaceholder}>
-                    Search spots or buildings
-                </Text>
-            </TouchableOpacity>
+    const [screenHeight, setScreenHeight] = useState(0);
+    const [headerHeight, setHeaderHeight] = useState(0);
+    const handleHeaderLayout = useCallback((e: LayoutChangeEvent) => setHeaderHeight(e.nativeEvent.layout.height), []);
+    // Search stays open (Cancel, results) until Cancel; the sheet is only locked while focused
+    const [searchActive, setSearchActive] = useState(false);
+    const [searchFocused, setSearchFocused] = useState(false);
 
-            {/* Map of the spots matching the current filters */}
-            <View style={styles.mapArea}>
-                <MapViewComponent
-                    height={MAP_HEIGHT}
-                    locations={spots}
-                    onLocationPress={(spot) => onOpenSpot(spot.location_id)}
-                />
+    // iOS screens run under the glass tab bar (included in the safe area); Android's end above it
+    const tabBarOverlap = Platform.OS === 'ios' ? insets.bottom : 0;
+
+    const animatedIndex = useSharedValue(DEFAULT_SNAP);
+    const sheetPosition = useSharedValue(0);
+    // gorhom sizes content for full height, so fit the list to the visible sheet instead, and fade it
+    // out at the smallest height so it doesn't show through the tab bar
+    const listStyle = useAnimatedStyle(() => ({
+        height: sheetPosition.value > 0 ? Math.max(0, screenHeight - sheetPosition.value - headerHeight) : undefined,
+        opacity: interpolate(animatedIndex.value, [0, 0.6], [0, 1], Extrapolation.CLAMP),
+    }));
+
+    // Just the header (above the tab bar), half, and full
+    const snapPoints = useMemo(
+        () => [Math.max(headerHeight + tabBarOverlap, 120), '50%', '100%'],
+        [headerHeight, tabBarOverlap],
+    );
+
+    // Map area covered by the sheet, capped at half the screen
+    const sheetCover = useDerivedValue(() => {
+        // Before layout: gorhom's '50%' is measured below topInset
+        if (sheetPosition.value <= 0) return (screenHeight - insets.top) * 0.5;
+        return Math.min(screenHeight - sheetPosition.value, screenHeight * 0.5);
+    });
+    const handleSheetChange = (index: number) => {
+        snapIndex.current = index;
+    };
+
+    // F-11: Search
+    const [query, setQuery] = useState('');
+    const trimmedQuery = query.trim();
+    const showingResults = searchActive && trimmedQuery.length > 0;
+    const search = useSpotSearch(query, searchActive);
+    const snapBeforeSearch = useRef(DEFAULT_SNAP);
+
+    const startSearch = () => {
+        if (!searchActive) {
+            snapBeforeSearch.current = snapIndex.current;
+            setSearchActive(true);
+        }
+        setSearchFocused(true);
+        sheet.current?.snapToIndex(FULL_SNAP);
+    };
+
+    const cancelSearch = useCallback(() => {
+        const index = snapBeforeSearch.current;
+        // gorhom moves the sheet as the keyboard closes, which would undo this, so wait for it
+        if (Keyboard.isVisible()) {
+            const sub = Keyboard.addListener('keyboardDidHide', () => {
+                sub.remove();
+                sheet.current?.snapToIndex(index);
+            });
+        } else {
+            sheet.current?.snapToIndex(index);
+        }
+        // Also blurs the field with a hardware keyboard
+        Keyboard.dismiss();
+        setQuery('');
+        setSearchActive(false);
+        setSearchFocused(false);
+    }, []);
+
+    // Android back: leaves search, then shrinks the sheet, then leaves
+    useFocusEffect(
+        useCallback(() => {
+            const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+                if (searchActive) {
+                    cancelSearch();
+                    return true;
+                }
+                if (snapIndex.current <= 0) return false;
+                sheet.current?.snapToIndex(0);
+                return true;
+            });
+            return () => sub.remove();
+        }, [searchActive, cancelSearch]),
+    );
+
+    const filtersActive = activeChips.length > 0;
+
+    const header = (
+        <View style={styles.header}>
+            <View style={styles.searchRow}>
+                <View style={styles.searchField}>
+                    <Feather name="search" size={20} color={colors.textSecondary} />
+                    <BottomSheetTextInput
+                        value={query}
+                        onChangeText={setQuery}
+                        onFocus={startSearch}
+                        onBlur={() => setSearchFocused(false)}
+                        placeholder="Search spots or buildings"
+                        placeholderTextColor={colors.textSecondary}
+                        autoCorrect={false}
+                        autoCapitalize="none"
+                        returnKeyType="search"
+                        style={styles.searchInput}
+                        accessibilityLabel="Search spots or buildings"
+                    />
+                    {query.length > 0 && (
+                        <Pressable
+                            onPress={() => setQuery('')}
+                            hitSlop={10}
+                            accessibilityRole="button"
+                            accessibilityLabel="Clear search"
+                        >
+                            <Feather name="x-circle" size={18} color={colors.textSecondary} />
+                        </Pressable>
+                    )}
+                </View>
+
+                {searchActive ? (
+                    <Pressable
+                        onPress={cancelSearch}
+                        hitSlop={8}
+                        style={styles.cancelButton}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel search"
+                    >
+                        <Text style={styles.cancelText}>Cancel</Text>
+                    </Pressable>
+                ) : (
+                    <SheetFilterButton activeCount={activeChips.length} onPress={onOpenFilters} />
+                )}
             </View>
-            {activeChips.length > 0 && (
+
+            {/* Filters don't apply to search results */}
+            {filtersActive && !showingResults && (
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -96,55 +236,113 @@ export default function ExploreScreen({
                             accessibilityRole="button"
                             accessibilityLabel={`Remove ${chip.label} filter`}
                         >
-                            <Text style={styles.activeChipText}>
-                                {chip.label}
-                            </Text>
+                            <Text style={styles.activeChipText}>{chip.label}</Text>
                             {/* Icon, since "×" sits low in this font */}
-                            <Feather
-                                name="x"
-                                size={12}
-                                color={colors.textOnPrimaryLight}
-                            />
+                            <Feather name="x" size={12} color={colors.textOnPrimaryLight} />
                         </TouchableOpacity>
                     ))}
 
                     {activeChips.length > 1 && (
-                        <TouchableOpacity
-                            style={styles.clearButton}
-                            onPress={clearAll}
-                            accessibilityRole="button"
-                        >
-                            <Text style={styles.clearButtonText}>
-                                Clear all
-                            </Text>
+                        <TouchableOpacity style={styles.clearButton} onPress={clearAll} accessibilityRole="button">
+                            <Text style={styles.clearButtonText}>Clear all</Text>
                         </TouchableOpacity>
                     )}
                 </ScrollView>
             )}
+        </View>
+    );
 
-            {/* Filters B-5 can't apply yet */}
-            {unsupported.length > 0 && (
-                <Text style={styles.notice}>
-                    Not applied yet: {unsupported.join(', ')}
-                </Text>
+    return (
+        <View style={styles.container} onLayout={(e) => setScreenHeight(e.nativeEvent.layout.height)}>
+            <MapViewComponent
+                height="100%"
+                rounded={false}
+                insets={{ top: insets.top, bottom: sheetCover }}
+                locations={spots}
+                onLocationPress={(spot) => onOpenSpot(spot.location_id)}
+            />
+
+            {screenHeight > 0 && (
+                <SheetHeaderContext.Provider value={{ header, onLayout: handleHeaderLayout }}>
+                    <BottomSheet
+                        ref={sheet}
+                        index={DEFAULT_SNAP}
+                        snapPoints={snapPoints}
+                        enableDynamicSizing={false}
+                        enablePanDownToClose={false}
+                        topInset={insets.top}
+                        onChange={handleSheetChange}
+                        // Content drags are handled by SheetScrollArea
+                        handleComponent={SheetHandle}
+                        enableHandlePanningGesture={!searchFocused}
+                        enableContentPanningGesture={false}
+                        // Let sideways swipes scroll the filter chips
+                        activeOffsetY={[-6, 6]}
+                        failOffsetX={[-12, 12]}
+                        keyboardBehavior="extend"
+                        keyboardBlurBehavior="none"
+                        android_keyboardInputMode="adjustResize"
+                        animatedIndex={animatedIndex}
+                        animatedPosition={sheetPosition}
+                        backgroundStyle={styles.sheetBackground}
+                        style={styles.sheetShadow}
+                    >
+                        <Animated.View style={listStyle}>
+                            <SheetScrollArea
+                                animatedIndex={animatedIndex}
+                                maxIndex={FULL_SNAP}
+                                sheetDragEnabled={!searchFocused}
+                                contentContainerStyle={[styles.list, { paddingBottom: spacing.xl + tabBarOverlap }]}
+                                keyboardShouldPersistTaps="handled"
+                                keyboardDismissMode="on-drag"
+                            >
+                                {showingResults ? (
+                                    <View style={styles.searchResults}>
+                                        {!search.loading && !search.error && search.results.map((spot) => (
+                                            <SpotSearchResult
+                                                key={`${spot.locationId}-${spot.seatingId ?? 'location'}`}
+                                                spot={spot}
+                                                onPress={(picked) => onOpenSpot(picked.locationId)}
+                                            />
+                                        ))}
+                                        <SpotSearchStatus
+                                            query={trimmedQuery}
+                                            loading={search.loading}
+                                            error={search.error}
+                                            onRetry={search.retry}
+                                            hasResults={search.results.length > 0}
+                                        />
+                                    </View>
+                                ) : (
+                                    <>
+                                        {/* Filters B-5 can't apply yet */}
+                                        {unsupported.length > 0 && (
+                                            <Text style={styles.notice}>Not applied yet: {unsupported.join(', ')}</Text>
+                                        )}
+
+                                        {/* Results (F-3): ranked SpotCards, with loading, error and empty states */}
+                                        <ExploreSpotList
+                                            spots={spots}
+                                            loading={loading}
+                                            error={error}
+                                            // Only filters B-5 actually applies; unsupported ones don't narrow the list
+                                            filtered={hasActiveFilters(exploreFilters)}
+                                            onOpenSpot={onOpenSpot}
+                                            onRetry={refresh}
+                                            onClearFilters={clearAll}
+                                        />
+                                    </>
+                                )}
+                            </SheetScrollArea>
+                        </Animated.View>
+                    </BottomSheet>
+                </SheetHeaderContext.Provider>
             )}
-
-            {/* Results (F-3): ranked SpotCards, with loading, error and empty states */}
-            <View style={styles.list}>
-                <ExploreSpotList
-                    spots={spots}
-                    loading={loading}
-                    error={error}
-                    // Only filters B-5 actually applies; unsupported ones don't narrow the list
-                    filtered={hasActiveFilters(exploreFilters)}
-                    onOpenSpot={onOpenSpot}
-                    onRetry={refresh}
-                    onClearFilters={clearAll}
-                />
-            </View>
-        </ScrollView>
+        </View>
     );
 }
+
+const FILTER_BUTTON_SIZE = 48;
 
 // Styles using Spotted's shared theme
 const styles = StyleSheet.create({
@@ -153,8 +351,47 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background,
     },
 
+    sheetBackground: {
+        backgroundColor: colors.background,
+        borderTopLeftRadius: radius.xxl,
+        borderTopRightRadius: radius.xxl,
+    },
+
+    sheetShadow: {
+        shadowColor: colors.shadow,
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 12,
+        elevation: 12,
+    },
+
+    // Matches gorhom's default handle
+    grabber: {
+        alignSelf: 'center',
+        width: 36,
+        height: 4,
+        borderRadius: 2,
+        marginTop: 10,
+        marginBottom: 10,
+        backgroundColor: colors.textPlaceholder,
+    },
+
+    header: {
+        paddingTop: spacing.xxs,
+        paddingBottom: spacing.sm,
+        gap: spacing.sm,
+    },
+
+    searchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        paddingHorizontal: layout.screenPaddingHorizontal,
+    },
+
     // F-11 search styles
-    searchButton: {
+    searchField: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
@@ -162,33 +399,33 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.border,
         borderRadius: radius.pill,
-        marginHorizontal: layout.screenPaddingHorizontal,
-        marginTop: spacing.md,
-        marginBottom: spacing.md,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.sm,
-        minHeight: 48,
+        minHeight: FILTER_BUTTON_SIZE,
     },
 
-    searchPlaceholder: {
+    searchInput: {
         ...typography.body,
-        color: colors.textSecondary,
+        flex: 1,
+        color: colors.textPrimary,
+        paddingVertical: 0,
     },
 
-    mapArea: {
-        paddingHorizontal: layout.screenPaddingHorizontal,
-        paddingTop: spacing.md,
+    cancelButton: {
+        height: FILTER_BUTTON_SIZE,
+        justifyContent: 'center',
+        paddingHorizontal: spacing.xxs,
     },
 
-    mapPlaceholderText: {
-        ...typography.caption,
-        color: colors.textSecondary,
+    cancelText: {
+        ...typography.bodyStrong,
+        color: colors.primaryDark,
     },
+
+    searchResults: { gap: spacing.sm },
 
     chipRow: {
         flexGrow: 0,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
     },
 
     chipRowContent: {
@@ -196,7 +433,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: spacing.xs,
         paddingHorizontal: layout.screenPaddingHorizontal,
-        paddingVertical: spacing.sm,
     },
 
     activeChip: {
@@ -233,10 +469,12 @@ const styles = StyleSheet.create({
     notice: {
         ...typography.caption,
         color: colors.textSecondary,
-        paddingHorizontal: layout.screenPaddingHorizontal,
-        paddingTop: spacing.sm,
+        paddingBottom: spacing.sm,
     },
 
-    // No flexGrow: iOS adds the header and tab bar insets on top, so a short page would scroll
-    list: { padding: layout.screenPaddingHorizontal },
+    list: {
+        paddingHorizontal: layout.screenPaddingHorizontal,
+        paddingTop: spacing.xs,
+        paddingBottom: spacing.xl,
+    },
 });

@@ -66,12 +66,8 @@ function reportedAgo(iso: string): string {
     return `Reported ${days} day${days === 1 ? '' : 's'} ago`
 }
 
-export default function SpotSearch({
-    onSelect,
-    variant = 'explore',
-}: SpotSearchProps) {
-    const headerOverlap = useHeaderOverlap()
-    const [query, setQuery] = useState('')
+/** `enabled` delays the location lookup, which can ask for permission */
+export function useSpotSearch(query: string, enabled = true) {
     const [results, setResults] = useState<SpotSummary[]>([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -84,8 +80,8 @@ export default function SpotSearch({
         isFallback: true,
     })
 
-    // Get the user's location when Search opens.
     useEffect(() => {
+        if (!enabled) return
         let active = true
 
         getSearchOrigin()
@@ -101,7 +97,7 @@ export default function SpotSearch({
         return () => {
             active = false
         }
-    }, [])
+    }, [enabled])
 
     // Debounce search so we don't search on every keystroke.
     useEffect(() => {
@@ -150,34 +146,41 @@ export default function SpotSearch({
         }
     }, [query, origin, retryCount])
 
-    const trimmed = query.trim()
+    return {
+        results,
+        loading,
+        error,
+        retry: () => setRetryCount((value) => value + 1),
+    }
+}
 
-    const placeholder =
-        variant === 'checkIn'
-            ? 'Where are you checking in?'
-            : 'Search spots or buildings'
-
-    // Shared Figma-style search result card.
-    const renderSpot = ({ item }: { item: SpotSummary }) => (
+export function SpotSearchResult({
+    spot,
+    onPress,
+}: {
+    spot: SpotSummary
+    onPress: (spot: SpotSummary) => void
+}) {
+    return (
         <Pressable
             style={({ pressed }) => [
                 styles.card,
                 pressed && styles.cardPressed,
             ]}
-            onPress={() => onSelect(item)}
+            onPress={() => onPress(spot)}
             accessibilityRole="button"
-            accessibilityLabel={`Select ${item.name}`}
+            accessibilityLabel={`Select ${spot.name}`}
         >
             {/* Spot name and crowding status */}
             <View style={styles.cardHeader}>
                 <Text style={styles.spotName}>
-                    {item.name}
+                    {spot.name}
                 </Text>
 
-                {!!item.status && (
+                {!!spot.status && (
                     <Badge
-                        label={item.status}
-                        tone={item.statusTone}
+                        label={spot.status}
+                        tone={spot.statusTone}
                     />
                 )}
             </View>
@@ -191,15 +194,15 @@ export default function SpotSearch({
                 />
 
                 <Text style={styles.reportText}>
-                    {item.reportedAt
-                        ? reportedAgo(item.reportedAt)
+                    {spot.reportedAt
+                        ? reportedAgo(spot.reportedAt)
                         : 'No recent updates'}
                 </Text>
             </View>
 
             {/* Noise, outlets, and walking time */}
             <View style={styles.amenitiesRow}>
-                {!!item.noiseLabel && (
+                {!!spot.noiseLabel && (
                     <View style={styles.amenity}>
                         <Feather
                             name="volume-2"
@@ -208,12 +211,12 @@ export default function SpotSearch({
                         />
 
                         <Text style={styles.amenityText}>
-                            {item.noiseLabel}
+                            {spot.noiseLabel}
                         </Text>
                     </View>
                 )}
 
-                {!!item.outlets && (
+                {!!spot.outlets && (
                     <View style={styles.amenity}>
                         <MaterialCommunityIcons
                             name="power-plug-outline"
@@ -227,7 +230,7 @@ export default function SpotSearch({
                     </View>
                 )}
 
-                {item.walkMinutes != null && (
+                {spot.walkMinutes != null && (
                     <View style={styles.amenity}>
                         <Feather
                             name="map-pin"
@@ -236,12 +239,114 @@ export default function SpotSearch({
                         />
 
                         <Text style={styles.amenityText}>
-                            {item.walkMinutes} min walk
+                            {spot.walkMinutes} min walk
                         </Text>
                     </View>
                 )}
             </View>
         </Pressable>
+    )
+}
+
+/** Loading, error and no-results states; renders nothing when there are results */
+export function SpotSearchStatus({
+    query,
+    loading,
+    error,
+    onRetry,
+    hasResults = false,
+}: {
+    query: string
+    loading: boolean
+    error: string | null
+    onRetry: () => void
+    hasResults?: boolean
+}) {
+    if (loading) {
+        return (
+            <View style={styles.emptyState}>
+                <ActivityIndicator
+                    size="large"
+                    color={colors.primaryDark}
+                />
+
+                <Text style={styles.emptyDescription}>
+                    Searching spots...
+                </Text>
+            </View>
+        )
+    }
+
+    if (error) {
+        return (
+            <View style={styles.emptyState}>
+                <Feather
+                    name="wifi-off"
+                    size={30}
+                    color={colors.textSecondary}
+                />
+
+                <Text style={styles.emptyTitle}>
+                    Search unavailable
+                </Text>
+
+                <Text style={styles.emptyDescription}>
+                    {error}
+                </Text>
+
+                <Pressable
+                    style={styles.retryButton}
+                    onPress={onRetry}
+                    accessibilityRole="button"
+                    accessibilityLabel="Try searching again"
+                >
+                    <Text style={styles.retryText}>
+                        Try again
+                    </Text>
+                </Pressable>
+            </View>
+        )
+    }
+
+    if (hasResults) return null
+
+    return (
+        <View style={styles.emptyState}>
+            <Feather
+                name="search"
+                size={30}
+                color={colors.textSecondary}
+            />
+
+            <Text style={styles.emptyTitle}>
+                No spots found
+            </Text>
+
+            <Text style={styles.emptyDescription}>
+                No spots match "{query}". Try another spot or
+                building name.
+            </Text>
+        </View>
+    )
+}
+
+export default function SpotSearch({
+    onSelect,
+    variant = 'explore',
+}: SpotSearchProps) {
+    const headerOverlap = useHeaderOverlap()
+    const [query, setQuery] = useState('')
+    const { results, loading, error, retry } = useSpotSearch(query)
+
+    const trimmed = query.trim()
+
+    const placeholder =
+        variant === 'checkIn'
+            ? 'Where are you checking in?'
+            : 'Search spots or buildings'
+
+    const renderSpot = ({ item }: { item: SpotSummary }) => (
+        <SpotSearchResult spot={item} onPress={onSelect} />
     )
 
     // Empty, loading, error, and no-results states.
@@ -266,71 +371,8 @@ export default function SpotSearch({
             )
         }
 
-        if (loading) {
-            return (
-                <View style={styles.emptyState}>
-                    <ActivityIndicator
-                        size="large"
-                        color={colors.primaryDark}
-                    />
-
-                    <Text style={styles.emptyDescription}>
-                        Searching spots...
-                    </Text>
-                </View>
-            )
-        }
-
-        if (error) {
-            return (
-                <View style={styles.emptyState}>
-                    <Feather
-                        name="wifi-off"
-                        size={30}
-                        color={colors.textSecondary}
-                    />
-
-                    <Text style={styles.emptyTitle}>
-                        Search unavailable
-                    </Text>
-
-                    <Text style={styles.emptyDescription}>
-                        {error}
-                    </Text>
-
-                    <Pressable
-                        style={styles.retryButton}
-                        onPress={() =>
-                            setRetryCount((value) => value + 1)
-                        }
-                        accessibilityRole="button"
-                        accessibilityLabel="Try searching again"
-                    >
-                        <Text style={styles.retryText}>
-                            Try again
-                        </Text>
-                    </Pressable>
-                </View>
-            )
-        }
-
         return (
-            <View style={styles.emptyState}>
-                <Feather
-                    name="search"
-                    size={30}
-                    color={colors.textSecondary}
-                />
-
-                <Text style={styles.emptyTitle}>
-                    No spots found
-                </Text>
-
-                <Text style={styles.emptyDescription}>
-                    No spots match "{trimmed}". Try another spot or
-                    building name.
-                </Text>
-            </View>
+            <SpotSearchStatus query={trimmed} loading={loading} error={error} onRetry={retry} />
         )
     }
 
