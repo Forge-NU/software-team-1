@@ -95,8 +95,10 @@ export default function ExploreScreen({
     const [screenHeight, setScreenHeight] = useState(0);
     const [headerHeight, setHeaderHeight] = useState(0);
     const handleHeaderLayout = useCallback((e: LayoutChangeEvent) => setHeaderHeight(e.nativeEvent.layout.height), []);
-    // Whether search is open (see startSearch below)
+    // Whether search is open (Cancel showing, results for any text), and whether its field has focus.
+    // The sheet is locked at full height only while the field has focus (see startSearch below).
     const [searchActive, setSearchActive] = useState(false);
+    const [searchFocused, setSearchFocused] = useState(false);
 
     // How far the tab bar covers the bottom of the screen. On iOS the screen runs under the glass
     // tab bar, so the sheet does too and needs room for it; each tab's safe area includes the tab
@@ -114,14 +116,9 @@ export default function ExploreScreen({
     // - just the header (search, Filters and chips) above the tab bar, so most of the map shows
     // - half the screen, the default, with the first few spots
     // - full height, for browsing the list (stops below the status bar via topInset)
-    // While searching, every height is full height. Drags can't move the sheet then anyway, but
-    // gorhom's keyboard handling snaps back to an earlier height when the keyboard closes, and this
-    // keeps that at full height too.
     const snapPoints = useMemo(
-        () => searchActive
-            ? ['100%', '100%', '100%']
-            : [Math.max(headerHeight + tabBarOverlap, 120), '50%', '100%'],
-        [searchActive, headerHeight, tabBarOverlap],
+        () => [Math.max(headerHeight + tabBarOverlap, 120), '50%', '100%'],
+        [headerHeight, tabBarOverlap],
     );
 
     // How much of the map the sheet covers, live while it's dragged, so the map keeps its logo and
@@ -137,8 +134,10 @@ export default function ExploreScreen({
         snapIndex.current = index;
     };
 
-    // F-11: Search, right in the sheet. Focusing the field starts searching: the sheet goes to full
-    // height and can't be dragged until Cancel. Until there's text, the usual list shows.
+    // F-11: Search, right in the sheet. Focusing the field starts searching and takes the sheet to full
+    // height, where it stays while the field has focus. Once the keyboard is put away (e.g. by
+    // scrolling the results), the sheet can be dragged again, and the results stay until Cancel.
+    // Until there's text, the usual list shows.
     const [query, setQuery] = useState('');
     const trimmedQuery = query.trim();
     const showingResults = searchActive && trimmedQuery.length > 0;
@@ -147,17 +146,32 @@ export default function ExploreScreen({
     const snapBeforeSearch = useRef(DEFAULT_SNAP);
 
     const startSearch = () => {
-        if (searchActive) return;
-        snapBeforeSearch.current = snapIndex.current;
-        setSearchActive(true);
+        // Cancel goes back to the height from before search first opened, not before a later refocus
+        if (!searchActive) {
+            snapBeforeSearch.current = snapIndex.current;
+            setSearchActive(true);
+        }
+        setSearchFocused(true);
         sheet.current?.snapToIndex(FULL_SNAP);
     };
 
     const cancelSearch = useCallback(() => {
+        const index = snapBeforeSearch.current;
+        // As the keyboard closes, gorhom moves the sheet back to where it was when the keyboard
+        // opened (full height), which would undo this move, so wait for it to finish closing first
+        if (Keyboard.isVisible()) {
+            const sub = Keyboard.addListener('keyboardDidHide', () => {
+                sub.remove();
+                sheet.current?.snapToIndex(index);
+            });
+        } else {
+            sheet.current?.snapToIndex(index);
+        }
+        // Takes focus from the field even when no on-screen keyboard is up (e.g. a hardware keyboard)
         Keyboard.dismiss();
         setQuery('');
         setSearchActive(false);
-        sheet.current?.snapToIndex(snapBeforeSearch.current);
+        setSearchFocused(false);
     }, []);
 
     // Android back: leaves search, then shrinks an expanded sheet, then leaves as usual
@@ -188,6 +202,7 @@ export default function ExploreScreen({
                         value={query}
                         onChangeText={setQuery}
                         onFocus={startSearch}
+                        onBlur={() => setSearchFocused(false)}
                         placeholder="Search spots or buildings"
                         placeholderTextColor={colors.textSecondary}
                         autoCorrect={false}
@@ -281,10 +296,10 @@ export default function ExploreScreen({
                         topInset={insets.top}
                         onChange={handleSheetChange}
                         // Dragging moves the sheet from the header only; the list scrolls first and hands
-                        // off to the sheet at its ends (see SheetScrollArea). While searching, nothing
-                        // moves it, so it stays at full height until Cancel.
+                        // off to the sheet at its ends (see SheetScrollArea). While the search field
+                        // has focus, nothing moves it, so it stays at full height.
                         handleComponent={SheetHandle}
-                        enableHandlePanningGesture={!searchActive}
+                        enableHandlePanningGesture={!searchFocused}
                         enableContentPanningGesture={false}
                         // Sideways swipes (e.g. on the filter chips) scroll instead of dragging the sheet
                         activeOffsetY={[-6, 6]}
@@ -301,7 +316,7 @@ export default function ExploreScreen({
                             <SheetScrollArea
                                 animatedIndex={animatedIndex}
                                 maxIndex={FULL_SNAP}
-                                sheetDragEnabled={!searchActive}
+                                sheetDragEnabled={!searchFocused}
                                 contentContainerStyle={[styles.list, { paddingBottom: spacing.xl + tabBarOverlap }]}
                                 // Results stay tappable with the keyboard up, and scrolling puts it away
                                 keyboardShouldPersistTaps="handled"
