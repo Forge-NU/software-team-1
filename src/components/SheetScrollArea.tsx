@@ -10,6 +10,7 @@ import {
     type PanGestureHandlerEventPayload,
 } from 'react-native-gesture-handler';
 import Animated, {
+    measure,
     scrollTo,
     useAnimatedRef,
     useAnimatedScrollHandler,
@@ -61,12 +62,20 @@ export default function SheetScrollArea({
     // While the sheet follows the finger, the list is held at this edge so it doesn't scroll too
     const sheetDragging = useSharedValue(false);
     const heldOffset = useSharedValue(0);
+    const holding = useSharedValue(false);
 
     const onScroll = useAnimatedScrollHandler((event) => {
         viewportHeight.value = event.layoutMeasurement.height;
         contentHeight.value = event.contentSize.height;
         if (sheetDragging.value) {
-            if (event.contentOffset.y !== heldOffset.value) scrollTo(scrollRef, 0, heldOffset.value, false);
+            // scrollTo fires this handler synchronously, so guard against looping. Clamp too: as the
+            // sheet grows the list does too, and its old bottom offset stops being reachable.
+            if (holding.value) return;
+            const target = Math.min(heldOffset.value, Math.max(0, contentHeight.value - viewportHeight.value));
+            if (Math.abs(event.contentOffset.y - target) < 0.5) return;
+            holding.value = true;
+            scrollTo(scrollRef, 0, target, false);
+            holding.value = false;
             return;
         }
         scrollY.value = event.contentOffset.y;
@@ -89,6 +98,9 @@ export default function SheetScrollArea({
             const touch = event.allTouches[0];
             if (!touch) return;
             lastY.value = touch.absoluteY;
+            // The list can be resized without scrolling, so measure it fresh
+            const layout = measure(scrollRef);
+            if (layout) viewportHeight.value = layout.height;
             pullDown.value = 0;
             pushUp.value = 0;
         })
@@ -109,9 +121,9 @@ export default function SheetScrollArea({
             pushUp.value = atBottom && canGrow && dy < 0 ? pushUp.value - dy : 0;
 
             if (pullDown.value >= HANDOFF_DISTANCE || pushUp.value >= HANDOFF_DISTANCE) {
+                // onScroll holds the list at this offset
                 heldOffset.value = pullDown.value > 0 ? 0 : maxScroll;
                 sheetDragging.value = true;
-                scrollTo(scrollRef, 0, heldOffset.value, false);
                 manager.activate();
             }
         })
@@ -143,7 +155,7 @@ export default function SheetScrollArea({
                     ...event,
                     translationY: event.translationY - translationAtHandoff.value,
                 });
-                scrollY.value = heldOffset.value;
+                scrollY.value = Math.min(heldOffset.value, Math.max(0, contentHeight.value - viewportHeight.value));
             }
             sheetDragging.value = false;
         });
@@ -156,7 +168,6 @@ export default function SheetScrollArea({
                         ref={scrollRef}
                         onScroll={onScroll}
                         scrollEventThrottle={16}
-                        onLayout={(e) => { viewportHeight.value = e.nativeEvent.layout.height; }}
                         onContentSizeChange={(_w, h) => { contentHeight.value = h; }}
                         contentContainerStyle={contentContainerStyle}
                         keyboardShouldPersistTaps={keyboardShouldPersistTaps}

@@ -98,9 +98,12 @@ export default function ExploreScreen({
     // iOS screens run under the glass tab bar (included in the safe area); Android's end above it
     const tabBarOverlap = Platform.OS === 'ios' ? insets.bottom : 0;
 
-    // Fade the list out at the smallest height, so it doesn't show through the tab bar
     const animatedIndex = useSharedValue(DEFAULT_SNAP);
-    const listFade = useAnimatedStyle(() => ({
+    const sheetPosition = useSharedValue(0);
+    // gorhom sizes content for full height, so fit the list to the visible sheet instead, and fade it
+    // out at the smallest height so it doesn't show through the tab bar
+    const listStyle = useAnimatedStyle(() => ({
+        height: sheetPosition.value > 0 ? Math.max(0, screenHeight - sheetPosition.value - headerHeight) : undefined,
         opacity: interpolate(animatedIndex.value, [0, 0.6], [0, 1], Extrapolation.CLAMP),
     }));
 
@@ -111,7 +114,6 @@ export default function ExploreScreen({
     );
 
     // Map area covered by the sheet, capped at half the screen
-    const sheetPosition = useSharedValue(0);
     const sheetCover = useDerivedValue(() => {
         // Before layout: gorhom's '50%' is measured below topInset
         if (sheetPosition.value <= 0) return (screenHeight - insets.top) * 0.5;
@@ -285,7 +287,7 @@ export default function ExploreScreen({
                         backgroundStyle={styles.sheetBackground}
                         style={styles.sheetShadow}
                     >
-                        <Animated.View style={[styles.listArea, listFade]}>
+                        <Animated.View style={listStyle}>
                             <SheetScrollArea
                                 animatedIndex={animatedIndex}
                                 maxIndex={FULL_SNAP}
@@ -362,8 +364,6 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 12,
     },
-
-    listArea: { flex: 1 },
 
     // Matches gorhom's default handle
     grabber: {
