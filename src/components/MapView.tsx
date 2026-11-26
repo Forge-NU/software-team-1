@@ -87,12 +87,25 @@ export default function MapViewComponent<T extends MapSpot>(props: MapViewCompon
                         />
                     ))}
                 </MapView>
-                {/* Spot locations come from OpenStreetMap, whose license (ODbL) requires this credit.
-                    Bottom right, so it doesn't cover the map provider's own logo and legal link. */}
-                <View style={styles.attribution} pointerEvents="none">
-                    <Text variant="caption" color="textSecondary">© OpenStreetMap contributors</Text>
-                </View>
+                {/* Bottom right, so it doesn't cover the map provider's own logo and legal link */}
+                <OsmAttribution corner="bottomRight" />
             </View>
+        </View>
+    );
+}
+
+/**
+ * Spot locations come from OpenStreetMap, whose license (ODbL) requires this credit on any
+ * map that shows them. Place it inside the map's container, in a corner the map's own
+ * logo doesn't use.
+ */
+export function OsmAttribution({ corner }: { corner: 'topRight' | 'bottomRight' }) {
+    return (
+        <View
+            style={[styles.attribution, corner === 'topRight' ? styles.attributionTop : styles.attributionBottom]}
+            pointerEvents="none"
+        >
+            <Text variant="caption" color="textSecondary">© OpenStreetMap contributors</Text>
         </View>
     );
 }
@@ -111,11 +124,17 @@ const styles = StyleSheet.create({
     attribution: {
         position: 'absolute',
         right: 0,
-        bottom: 0,
         paddingHorizontal: 6,
         paddingVertical: 2,
-        borderTopLeftRadius: 8,
         backgroundColor: colors.surface,
         opacity: 0.85,
+    },
+    attributionBottom: {
+        bottom: 0,
+        borderTopLeftRadius: 8,
+    },
+    attributionTop: {
+        top: 0,
+        borderBottomLeftRadius: 8,
     },
 });

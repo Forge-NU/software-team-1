@@ -7,32 +7,65 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
 
-import { formatTimeAgo } from '../lib/formatTime';
+import PhotoViewer from '../components/spot/PhotoViewer';
+import { formatDayLabel, formatTimeAgo } from '../lib/formatTime';
 import { getLocation } from '../lib/places';
+import { plural } from '../lib/spotFormat';
+import { spotStyles } from '../components/spot/styles';
 import { getRecentPhotos } from '../lib/posts';
 import type { RecentPhoto } from '../lib/posts';
 import type { Location } from '../types/location';
-import { colors, radius, spacing, typography } from '../theme';
+import { colors, layout, radius, spacing, typography } from '../theme';
 
 interface PhotoGalleryScreenProps {
   locationId: number;
+  /** Photo to open full screen right away, e.g. the one tapped in an update. */
+  initialPhotoId?: number;
   onBack: () => void;
 }
 
+const GAP = 4;
+const COLUMNS = 3;
+
+/** One day's photos, plus each photo's position in the full list (for the viewer). */
+interface DayGroup {
+  label: string;
+  items: { photo: RecentPhoto; index: number }[];
+}
+
+/** Photos are newest first, so each day's photos are already together. */
+function groupByDay(photos: RecentPhoto[]): DayGroup[] {
+  const groups: DayGroup[] = [];
+  photos.forEach((photo, index) => {
+    const label = formatDayLabel(photo.created_at);
+    const last = groups[groups.length - 1];
+    if (last?.label === label) last.items.push({ photo, index });
+    else groups.push({ label, items: [{ photo, index }] });
+  });
+  return groups;
+}
+
+/** A spot's recent photos as an even grid, grouped by day, newest first, each tagged with who posted it. */
 export default function PhotoGalleryScreen({
   locationId,
+  initialPhotoId,
   onBack,
 }: PhotoGalleryScreenProps) {
   const [location, setLocation] = useState<Location | null>(null);
   const [photos, setPhotos] = useState<RecentPhoto[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  /** The photo open full screen, or null for the grid. */
+  const [viewing, setViewing] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const { width } = useWindowDimensions();
+  const { bottom } = useSafeAreaInsets();
+  const tile = (width - layout.screenPaddingHorizontal * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
 
   const loadGallery = useCallback(async () => {
     setLoading(true);
@@ -46,187 +79,110 @@ export default function PhotoGalleryScreen({
 
       setLocation(locationData);
       setPhotos(photoData);
-      setCurrentIndex(0);
 
       if (!locationData) {
         setError('This spot could not be found.');
       }
+
+      const start = photoData.findIndex((photo) => photo.photo_id === initialPhotoId);
+      if (start >= 0) setViewing(start);
     } catch (err) {
       console.error('Failed to load photo gallery:', err);
       setError('Could not load photos. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [locationId]);
+  }, [locationId, initialPhotoId]);
 
   useEffect(() => {
     loadGallery();
   }, [loadGallery]);
 
-  function showPrevious() {
-    setCurrentIndex((index) =>
-      index === 0 ? photos.length - 1 : index - 1
+  if (loading) {
+    return (
+      <View style={styles.centerState}>
+        <ActivityIndicator size="large" color={colors.primaryDark} />
+        <Text style={styles.stateText}>Loading photos...</Text>
+      </View>
     );
   }
 
-  function showNext() {
-    setCurrentIndex((index) =>
-      index === photos.length - 1 ? 0 : index + 1
+  if (error || photos.length === 0) {
+    return (
+      <View style={styles.centerState}>
+        <Text style={styles.stateTitle}>{error ? 'Unable to load gallery' : 'No photos yet'}</Text>
+        <Text style={styles.stateText}>
+          {error ?? 'Photos shared at this spot will appear here.'}
+        </Text>
+
+        {error && (
+          <Pressable style={styles.button} onPress={loadGallery}>
+            <Text style={styles.buttonText}>Try again</Text>
+          </Pressable>
+        )}
+
+        <Pressable onPress={onBack} style={styles.link}>
+          <Text style={styles.linkText}>Back to spot</Text>
+        </Pressable>
+      </View>
     );
   }
 
-  const { bottom } = useSafeAreaInsets();
+  const checkIns = new Set(photos.map((photo) => photo.post_id)).size;
 
-  const currentPhoto = photos[currentIndex];
+  const renderTile = ({ photo, index }: DayGroup['items'][number]) => {
+    const author = photo.author_name || 'Anonymous';
+    return (
+      <Pressable
+        key={photo.photo_id}
+        onPress={() => setViewing(index)}
+        accessibilityRole="button"
+        accessibilityLabel={`Photo by ${author}, ${formatTimeAgo(photo.created_at)}`}
+        style={[styles.tile, { width: tile, height: tile }]}
+      >
+        <Image source={{ uri: photo.url }} style={StyleSheet.absoluteFill} />
+        {/* Name only; the day heading says when */}
+        <View style={[spotStyles.photoBadge, styles.who]}>
+          <Text style={[spotStyles.photoBadgeText, styles.whoText]} numberOfLines={1}>
+            {author}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <Stack.Screen
-        options={{
-          headerRight: () => (
-            <Text style={styles.counter}>
-              {photos.length > 0
-                ? `${currentIndex + 1} of ${photos.length}`
-                : '0 photos'}
-            </Text>
-          ),
+      <ScrollView
+        contentContainerStyle={{
+          paddingBottom: spacing.xl + (Platform.OS === 'ios' ? 0 : bottom),
         }}
-      />
-
-      {loading ? (
-        <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={colors.primaryDark} />
-          <Text style={styles.stateText}>Loading photos...</Text>
-        </View>
-      ) : error ? (
-        <View style={styles.centerState}>
-          <Text style={styles.stateTitle}>Unable to load gallery</Text>
-          <Text style={styles.stateText}>{error}</Text>
-
-          <Pressable style={styles.secondaryButton} onPress={loadGallery}>
-            <Text style={styles.secondaryButtonText}>Try again</Text>
-          </Pressable>
-
-          <Pressable onPress={onBack} style={styles.returnLink}>
-            <Text style={styles.linkText}>Back to spot</Text>
-          </Pressable>
-        </View>
-      ) : photos.length === 0 ? (
-        <View style={styles.centerState}>
-          <Text style={styles.stateTitle}>No photos yet</Text>
-          <Text style={styles.stateText}>
-            Photos shared at this spot will appear here.
+        showsVerticalScrollIndicator={false}
+        // Starts below the glass header (iOS 26) but scrolls up under it
+        contentInsetAdjustmentBehavior="automatic"
+      >
+        <View style={styles.header}>
+          <Text style={styles.spotName}>{location?.name ?? 'Spot photos'}</Text>
+          <Text style={styles.summary}>
+            {plural(photos.length, 'photo')} from {plural(checkIns, 'check-in')}
           </Text>
-
-          <Pressable style={styles.backButton} onPress={onBack}>
-            <Text style={styles.backButtonText}>Back to spot</Text>
-          </Pressable>
         </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={[
-            styles.content,
-            // iOS adds the home indicator inset itself (contentInsetAdjustmentBehavior)
-            { paddingBottom: styles.content.paddingBottom + (Platform.OS === 'ios' ? 0 : bottom) },
-          ]}
-          showsVerticalScrollIndicator={false}
-          // Starts below the glass header (iOS 26) but scrolls up under it
-          contentInsetAdjustmentBehavior="automatic"
-        >
-          {/* Location and photo details */}
-          <View style={styles.headingSection}>
-            <Text style={styles.locationTitle}>
-              {location?.name ?? 'Spot photos'}
-            </Text>
 
-            <Text style={styles.photoInfo}>
-              {currentPhoto.author_name || 'Anonymous'} ·{' '}
-              {formatTimeAgo(currentPhoto.created_at)}
-            </Text>
-          </View>
-
-          {/* Main photo */}
-          <View style={styles.mainPhotoContainer}>
-            <Image
-              key={currentPhoto.photo_id}
-              source={{ uri: currentPhoto.url }}
-              style={styles.mainPhoto}
-              resizeMode="cover"
-            />
-          </View>
-
-          {/* Previous, dots and next */}
-          <View style={styles.navigation}>
-            <Pressable
-              onPress={showPrevious}
-              style={styles.navButton}
-              accessibilityRole="button"
-            >
-              <Text style={styles.navButtonText}>← Previous</Text>
-            </Pressable>
-
-            <View style={styles.dots}>
-              {photos.map((photo, index) => (
-                <View
-                  key={photo.photo_id}
-                  style={[
-                    styles.dot,
-                    index === currentIndex && styles.activeDot,
-                  ]}
-                />
-              ))}
+        {groupByDay(photos).map((group) => (
+          <View key={group.label} style={styles.day}>
+            <View style={styles.dayHeader}>
+              <Text style={styles.dayLabel}>{group.label}</Text>
+              <Text style={styles.dayCount}>
+                {plural(group.items.length, 'photo')}
+              </Text>
             </View>
 
-            <Pressable
-              onPress={showNext}
-              style={styles.navButton}
-              accessibilityRole="button"
-            >
-              <Text style={styles.navButtonText}>Next →</Text>
-            </Pressable>
+            <View style={styles.grid}>{group.items.map(renderTile)}</View>
           </View>
+        ))}
+      </ScrollView>
 
-          {/* Caption */}
-          {currentPhoto.caption ? (
-            <Text style={styles.caption}>{currentPhoto.caption}</Text>
-          ) : null}
-
-          {/* Thumbnails */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.carouselSection}
-            contentContainerStyle={styles.carousel}
-          >
-            {photos.map((photo, index) => (
-              <Pressable
-                key={photo.photo_id}
-                onPress={() => setCurrentIndex(index)}
-                style={[
-                  styles.thumbnailWrapper,
-                  index === currentIndex && styles.selectedThumbnail,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={`View photo ${index + 1}`}
-              >
-                <Image
-                  source={{ uri: photo.url }}
-                  style={styles.thumbnail}
-                  resizeMode="cover"
-                />
-              </Pressable>
-            ))}
-          </ScrollView>
-
-          <Pressable
-            onPress={onBack}
-            style={styles.backButton}
-            accessibilityRole="button"
-          >
-            <Text style={styles.backButtonText}>Back to spot</Text>
-          </Pressable>
-        </ScrollView>
-      )}
+      <PhotoViewer photos={photos} startIndex={viewing} onClose={() => setViewing(null)} />
     </View>
   );
 }
@@ -234,132 +190,70 @@ export default function PhotoGalleryScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
     backgroundColor: colors.surface,
+    paddingHorizontal: layout.screenPaddingHorizontal,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: spacing.xxs,
   },
-  counter: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: spacing.lg,
-    paddingBottom: 36,
-    alignItems: 'center',
-  },
-  headingSection: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  locationTitle: {
-    ...typography.display,
-    textAlign: 'center',
+  spotName: {
+    ...typography.title,
     color: colors.textPrimary,
   },
-  photoInfo: {
-    ...typography.bodySmall,
-    marginTop: spacing.xxs,
-    textAlign: 'center',
+  summary: {
+    ...typography.caption,
     color: colors.textSecondary,
   },
-  mainPhotoContainer: {
-    width: '100%',
-    maxWidth: 760,
-    alignSelf: 'center',
-    backgroundColor: colors.primaryLight,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.textPrimary,
-    overflow: 'hidden',
+  day: {
+    paddingHorizontal: layout.screenPaddingHorizontal,
+    paddingTop: spacing.md,
+    gap: spacing.xs,
   },
-  mainPhoto: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-  },
-  navigation: {
-    width: '100%',
-    maxWidth: 760,
+  dayHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing.md,
+    alignItems: 'baseline',
   },
-  navButton: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.primaryLight,
-  },
-  navButtonText: {
+  dayLabel: {
     ...typography.label,
     color: colors.textPrimary,
   },
-  dots: {
-    flexDirection: 'row',
-    gap: spacing.xxs,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.pill,
-    backgroundColor: colors.border,
-  },
-  activeDot: {
-    backgroundColor: colors.textPrimary,
-  },
-  caption: {
+  dayCount: {
     ...typography.caption,
-    marginTop: spacing.md,
-    textAlign: 'center',
     color: colors.textSecondary,
   },
-  carouselSection: {
-    width: '100%',
-    maxWidth: 760,
-    marginTop: spacing.lg,
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GAP,
   },
-  carousel: {
-    gap: spacing.xs,
-  },
-  thumbnailWrapper: {
-    width: 100,
-    height: 76,
+  tile: {
     borderRadius: radius.md,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: colors.border,
+    backgroundColor: colors.border,
   },
-  selectedThumbnail: {
-    borderColor: colors.textPrimary,
+  who: {
+    position: 'absolute',
+    left: spacing.xxs + 2,
+    bottom: spacing.xxs + 2,
+    maxWidth: '85%',
   },
-  thumbnail: {
-    width: '100%',
-    height: '100%',
-  },
-  backButton: {
-    marginTop: spacing.lg,
-    width: '100%',
-    maxWidth: 760,
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.textSecondary,
-    backgroundColor: colors.surface,
-  },
-  backButtonText: {
-    ...typography.bodyStrong,
-    color: colors.textPrimary,
+  // Smaller than other badges so names fit on the tiles
+  whoText: {
+    ...typography.tag,
+    lineHeight: 16,
   },
   centerState: {
     flex: 1,
-    padding: 24,
+    padding: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.background,
   },
   stateTitle: {
     ...typography.title,
@@ -368,24 +262,24 @@ const styles = StyleSheet.create({
   },
   stateText: {
     ...typography.bodySmall,
-    marginTop: 10,
+    marginTop: spacing.xs,
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  secondaryButton: {
-    marginTop: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 10,
+  button: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.md,
     backgroundColor: colors.primaryLight,
   },
-  secondaryButtonText: {
+  buttonText: {
     ...typography.label,
     color: colors.primaryDark,
   },
-  returnLink: {
-    marginTop: 18,
-    padding: 8,
+  link: {
+    marginTop: spacing.md,
+    padding: spacing.xs,
   },
   linkText: {
     ...typography.label,

@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 import { ALREADY_REPORTED, reportPost } from '../lib/flags';
 import { getLocation, getSeatingInfo } from '../lib/places';
 import type { SeatingInfo } from '../lib/places';
-import { getRecentPhotos } from '../lib/posts';
+import { deletePost, getRecentPhotos } from '../lib/posts';
 import type { RecentPhoto } from '../lib/posts';
 import { getPostsWithVotes, setVote } from '../lib/votes';
 import type { PostWithVotes, VoteValue } from '../lib/votes';
@@ -13,7 +13,7 @@ import type { Location } from '../types/location';
 /** Reporting twice isn't an error for the user, so it comes back as its own result. */
 export type ReportResult = 'reported' | 'already_reported';
 
-/** Loads everything the spot screen shows, and handles voting on and reporting its updates. */
+/** Loads everything the spot screen shows, and handles voting on, reporting and deleting its updates. */
 export function useSpotDetails(locationId: number) {
   const [location, setLocation] = useState<Location | null>(null);
   const [posts, setPosts] = useState<PostWithVotes[]>([]);
@@ -104,6 +104,13 @@ export function useSpotDetails(locationId: number) {
     }
   }
 
+  /** Deletes one of the user's own updates, and its photos from the gallery. */
+  async function removePost(postId: number) {
+    await deletePost(postId);
+    setPosts((current) => current.filter((post) => post.post_id !== postId));
+    setPhotos((current) => current.filter((photo) => photo.post_id !== postId));
+  }
+
   /** Reports a post. Throws on any other failure, so the sheet can offer a retry. */
   async function report(postId: number, reason: string): Promise<ReportResult> {
     try {
@@ -116,5 +123,5 @@ export function useSpotDetails(locationId: number) {
     }
   }
 
-  return { location, posts, photos, seating, loading, vote, report };
+  return { location, posts, photos, seating, loading, vote, removePost, report };
 }

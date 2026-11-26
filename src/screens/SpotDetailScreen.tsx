@@ -5,28 +5,32 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 
+import AddressCard from '../components/spot/AddressCard';
 import AmenitiesCard from '../components/spot/AmenitiesCard';
-import PhotoStrip from '../components/spot/PhotoStrip';
 import RecentUpdates from '../components/spot/RecentUpdates';
 import ReportPostSheet from '../components/spot/ReportPostSheet';
 import SaveButton from '../components/spot/SaveButton';
+import SpotCover, { COVER_OVERLAP } from '../components/spot/SpotCover';
 import StatusBox from '../components/spot/StatusBox';
 import { useAuth } from '../context/AuthContext';
+import { useSpotAddress } from '../hooks/useSpotAddress';
 import { useSpotBookmark } from '../hooks/useSpotBookmark';
 import { useSpotDetails } from '../hooks/useSpotDetails';
-import { formatFloor, getAmenities, outletLevelForPost } from '../lib/spot';
+import { formatFloor, getAmenities, outletLevelForPost, priceLabels } from '../lib/spot';
 import type { Location } from '../types/location';
 import { colors, layout, radius, spacing, typography } from '../theme';
 
 interface SpotDetailScreenProps {
   locationId: number;
   onBack: () => void;
-  onSeeAllPhotos: (locationId: number) => void;
+  /** Opens the photo gallery, at a given photo if there is one. */
+  onSeeAllPhotos: (locationId: number, photoId?: number) => void;
   /** Gets the spot's name too, so the check-in can show it without loading the spot again. */
   onCheckIn: (locationId: number, name: string) => void;
   onGetDirections: (location: Location) => void;
@@ -41,10 +45,11 @@ export default function SpotDetailScreen({
   onGetDirections,
   walkMinutes,
 }: SpotDetailScreenProps) {
-  const { location, posts, photos, seating, loading, vote, report } =
+  const { location, posts, photos, seating, loading, vote, removePost, report } =
     useSpotDetails(locationId);
-  const { saved, toggle: toggleSaved } = useSpotBookmark(locationId);
   const { session } = useAuth();
+  const { saved, toggle: toggleSaved } = useSpotBookmark(locationId);
+  const { address, status: addressStatus } = useSpotAddress(location);
   const { bottom } = useSafeAreaInsets();
   const [reportingPostId, setReportingPostId] = useState<number | null>(null);
 
@@ -84,8 +89,20 @@ export default function SpotDetailScreen({
   const amenities = getAmenities(seating);
   const latestPost = posts[0];
 
+  // For now Wi-Fi comes from check-ins: the latest report with a speed decides it (0 Mbps
+  // means none). With no reports it says "Wi-Fi unknown" rather than guessing.
+  const wifiMbps = posts.find((post) => post.wifi_mbps != null)?.wifi_mbps ?? null;
+  const wifi =
+    wifiMbps === null ? 'Wi-Fi unknown' : wifiMbps > 0 ? 'Wi-Fi available' : 'Wi-Fi unavailable';
+
+  const price =
+    (location.price_range_id !== null && priceLabels[location.price_range_id]) || 'Price unknown';
+
+  // e.g. "Northeastern University · $$ · Wi-Fi available · Floor 2"
   const subtitle = [
-    location.campus ?? location.address?.street_one,
+    location.campus,
+    price,
+    wifi,
     amenities.floor ? formatFloor(amenities.floor) : null,
     walkMinutes !== undefined ? `${walkMinutes} min walk` : null,
   ]
@@ -106,39 +123,55 @@ export default function SpotDetailScreen({
         // Starts below the glass header (iOS 26) but scrolls up under it
         contentInsetAdjustmentBehavior="automatic"
       >
-        <View style={styles.header}>
-          <Text style={styles.spotName}>
-            {location.name}
-          </Text>
+        <SpotCover
+          location={location}
+          photos={photos}
+          onSeeAllPhotos={() => onSeeAllPhotos(locationId)}
+        />
 
-          {subtitle.length > 0 && (
+        {/* White rounded sheet that slides up over the cover: name, details, address */}
+        <View style={styles.sheet}>
+          <View style={styles.header}>
+            <Text style={styles.spotName}>
+              {location.name}
+            </Text>
+
             <Text style={styles.subtitle}>
               {subtitle}
             </Text>
-          )}
+          </View>
+
+          <AddressCard
+            name={location.name}
+            address={address}
+            status={addressStatus}
+            // A looked-up address also helps the map app find the place itself
+            onGetDirections={() => onGetDirections({ ...location, address })}
+          />
         </View>
 
-        <StatusBox
-          post={latestPost}
-          outletLevel={
-            latestPost ? outletLevelForPost(seating, latestPost) : null
-          }
-        />
+        <View style={styles.body}>
+          <StatusBox
+            post={latestPost}
+            outletLevel={
+              latestPost
+                ? outletLevelForPost(seating, latestPost)
+                : amenities.outletLevel
+            }
+          />
 
-        <AmenitiesCard location={location} amenities={amenities} />
+          <AmenitiesCard location={location} amenities={amenities} />
 
-        <PhotoStrip
-          photos={photos}
-          onSeeAll={() => onSeeAllPhotos(locationId)}
-        />
-
-        <RecentUpdates
-          posts={posts}
-          seating={seating}
-          onVote={vote}
-          onReport={setReportingPostId}
-          myUserId={session?.user.id}
-        />
+          <RecentUpdates
+            posts={posts}
+            seating={seating}
+            onVote={vote}
+            currentUserId={session?.user.id ?? null}
+            onDelete={removePost}
+            onOpenPhoto={(photoId) => onSeeAllPhotos(locationId, photoId)}
+            onReport={setReportingPostId}
+          />
+        </View>
       </ScrollView>
 
       <ReportPostSheet
@@ -147,33 +180,22 @@ export default function SpotDetailScreen({
         onClose={() => setReportingPostId(null)}
       />
 
-      {/* Main actions */}
       <View
         style={[
           styles.actions,
-          { paddingBottom: spacing.md + bottom },
+          { paddingBottom: spacing.sm + bottom },
         ]}
       >
-        <Pressable
+        <TouchableOpacity
           onPress={() => onCheckIn(locationId, location.name)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
           style={styles.checkInButton}
         >
           <Text style={styles.checkInText}>
             Check in
           </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => onGetDirections(location)}
-          hitSlop={8}
-        >
-          <Text style={styles.directionsText}>
-            Get directions
-            {walkMinutes !== undefined &&
-              ` · ${walkMinutes} min walk`}
-            {' →'}
-          </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -182,7 +204,7 @@ export default function SpotDetailScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   centered: {
     flex: 1,
@@ -204,7 +226,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     ...typography.bodyStrong,
-    color: colors.surface,
+    color: colors.textOnPrimary,
   },
   loadingText: {
     ...typography.body,
@@ -212,16 +234,31 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   scrollContent: {
-    padding: layout.screenPaddingHorizontal,
     paddingBottom: spacing.xl,
   },
+  sheet: {
+    marginTop: -COVER_OVERLAP,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    paddingHorizontal: layout.screenPaddingHorizontal,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
   header: {
-    marginBottom: spacing.lg,
+    gap: spacing.xxs,
+  },
+  body: {
+    paddingHorizontal: layout.screenPaddingHorizontal,
+    paddingTop: spacing.xl,
+    gap: spacing.xl,
   },
   spotName: {
     ...typography.display,
     color: colors.textPrimary,
-    marginBottom: spacing.xxs,
   },
   subtitle: {
     ...typography.bodySmall,
@@ -230,24 +267,18 @@ const styles = StyleSheet.create({
   actions: {
     paddingHorizontal: layout.screenPaddingHorizontal,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-    alignItems: 'center',
-    gap: spacing.sm,
     backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   checkInButton: {
-    alignSelf: 'stretch',
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
+    backgroundColor: colors.primaryDark,
+    borderRadius: radius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
   checkInText: {
     ...typography.bodyStrong,
-    color: colors.textPrimary,
-  },
-  directionsText: {
-    ...typography.bodySmall,
-    color: colors.primaryDark,
+    color: colors.textOnPrimary,
   },
 });

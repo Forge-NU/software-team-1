@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 
+import { SwipeToDelete } from '../SwipeToDelete';
 import type { SeatingInfo } from '../../lib/places';
 import { formatTimeAgo } from '../../lib/formatTime';
 import { isStale, outletLevelForPost } from '../../lib/spot';
@@ -13,9 +14,11 @@ interface RecentUpdatesProps {
   posts: PostWithVotes[];
   seating: SeatingInfo[];
   onVote: (postId: number, vote: 1 | -1) => void;
+  /** The signed-in user. Only their own updates can be swiped to delete, and Report is hidden on them. */
+  currentUserId: string | null;
+  onDelete: (postId: number) => Promise<void>;
+  onOpenPhoto: (photoId: number) => void;
   onReport: (postId: number) => void;
-  /** The signed-in user, so Report is hidden on their own updates */
-  myUserId?: string;
 }
 
 /** All updates, newest first. Says so when none are recent, and labels older ones outdated. */
@@ -23,8 +26,10 @@ export default function RecentUpdates({
   posts,
   seating,
   onVote,
+  currentUserId,
+  onDelete,
+  onOpenPhoto,
   onReport,
-  myUserId,
 }: RecentUpdatesProps) {
   const hasFreshPosts = posts.some((post) => !isStale(post.created_at));
 
@@ -41,13 +46,19 @@ export default function RecentUpdates({
       )}
 
       {posts.map((post) => (
-        <UpdateCard
+        <SwipeToDelete
           key={post.post_id}
-          post={post}
-          outletLevel={outletLevelForPost(seating, post)}
-          onVote={onVote}
-          onReport={post.user_id === myUserId ? undefined : onReport}
-        />
+          enabled={currentUserId !== null && post.user_id === currentUserId}
+          onDelete={() => onDelete(post.post_id)}
+        >
+          <UpdateCard
+            post={post}
+            outletLevel={outletLevelForPost(seating, post)}
+            onVote={onVote}
+            onOpenPhoto={onOpenPhoto}
+            onReport={post.user_id === currentUserId ? undefined : onReport}
+          />
+        </SwipeToDelete>
       ))}
     </View>
   );

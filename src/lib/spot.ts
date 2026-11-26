@@ -6,6 +6,7 @@ import {
   PHONE_POLICIES,
   PRICE_RANGES,
 } from '../constants/lookups';
+import type { Address } from '../types/location';
 import type { SeatingInfo } from './places';
 
 // The shared labels are keyed by literal ids; widen them since posts only carry plain numbers.
@@ -30,6 +31,32 @@ export function isStale(dateString: string): boolean {
 /** "2" -> "Floor 2"; anything else, like "Ground", is shown as is. */
 export function formatFloor(floor: string): string {
   return /^\d+$/.test(floor) ? `Floor ${floor}` : floor;
+}
+
+export interface FormattedAddress {
+  /** "360 Huntington Ave", or null if the address has no street. */
+  street: string | null;
+  /** "Boston, MA 02115", or null if the address has no city, region or postal code. */
+  locality: string | null;
+  /** Both parts on one line, for map searches. */
+  full: string;
+}
+
+/** Splits an address into a street line and a city line. Null if there's nothing to show. */
+export function formatAddress(address: Address | null): FormattedAddress | null {
+  if (!address) return null;
+
+  const join = (parts: (string | null)[], separator: string) =>
+    parts.filter(Boolean).join(separator) || null;
+
+  const street = join([address.street_one, address.street_two], ', ');
+  const locality = join(
+    [address.city, join([address.region, address.postal_code], ' ')],
+    ', '
+  );
+  const full = join([street, locality], ', ');
+
+  return full ? { street, locality, full } : null;
 }
 
 export interface SpotAmenities {

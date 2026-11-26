@@ -27,12 +27,14 @@ export function SpotDetailRoute({ base }: { base: TabBase }) {
       <SpotDetailScreen
         locationId={locationId}
         onBack={router.back}
-        onSeeAllPhotos={() => router.push(`${base}/spot/photos/${locationId}`)}
+        onSeeAllPhotos={(_, photoId) =>
+          router.push(`${base}/spot/photos/${locationId}${photoId ? `?photoId=${photoId}` : ''}`)
+        }
         // Check in skips search and starts at this spot, showing its name
         onCheckIn={(_, name) =>
           router.navigate({ pathname: '/check-in', params: { locationId: String(locationId), name } })
         }
-        onGetDirections={(location) => openDirections(location.latitude, location.longitude)}
+        onGetDirections={openDirections}
       />
     </>
   );
@@ -40,12 +42,16 @@ export function SpotDetailRoute({ base }: { base: TabBase }) {
 
 export function SpotPhotosRoute() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, photoId } = useLocalSearchParams<{ id: string; photoId?: string }>();
 
   return (
     <>
       <Stack.Screen options={{ title: 'Recent photos' }} />
-      <PhotoGalleryScreen locationId={Number(id)} onBack={router.back} />
+      <PhotoGalleryScreen
+        locationId={Number(id)}
+        initialPhotoId={photoId ? Number(photoId) : undefined}
+        onBack={router.back}
+      />
     </>
   );
 }
