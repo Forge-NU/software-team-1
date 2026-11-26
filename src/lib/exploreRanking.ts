@@ -1,8 +1,12 @@
-// Pure filtering and ranking for Explore. Only type imports, so the backend tests can run it.
+// Pure filtering and ranking for Explore. Imports only types and other pure, React-free
+// modules (with .ts extensions), so the backend Deno tests can run it.
 
 import type { Address, Location } from '../types/location.ts'
+import { getMostCommonValues } from './mostCommon.ts';
+import { isRecent, RECENT_MINUTES } from './spotFormat.ts';
 
-export const RECENT_MINUTES = 90
+// searchRanking.ts and savedSpotRows.ts import it from here.
+export { RECENT_MINUTES }
 
 // Lookup ids from seed_lookups. Update these if those rows change.
 /** noise_level 'Quiet'; Silent and Quiet count as quiet. */
@@ -38,13 +42,16 @@ type LocationFields = Pick<
   'location_id' | 'name' | 'location_type' | 'campus' | 'price_range_id' | 'latitude' | 'longitude'
 >
 
-export interface PostRow {
+export interface PostRow extends Rankings {
   created_at: string
+  post_photo: { storage_path: string; created_at: string }[]
+}
+
+interface Rankings {
   crowd_level_id: number
   noise_level_id: number | null
   crowd_level: { label: string } | null
   noise_level: { label: string } | null
-  post_photo: { storage_path: string; created_at: string }[]
 }
 
 export interface LocationRow extends LocationFields {
@@ -115,21 +122,21 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
     if (f.groupStudy && !row.seating_area.some((s) => s.capacity_id >= GROUP_CAPACITY_ID || s.seat_type === 'study_room')) continue
     if (f.chargers && !row.seating_area.some((s) => s.outlet_level_id >= CHARGERS_OUTLET_LEVEL_ID)) continue
 
-    // TODO: Find all "current" posts and use the most rated items, or last rated if no current
+    const [isCurrent, rankings] = getRankings(row.post, now)
     const post = latest(row.post.filter((p) => Date.parse(p.created_at) <= now), (p) => p.created_at)
     const age = post ? now - Date.parse(post.created_at) : Infinity
-    const current = post && age < windowMs ? post : null
 
     if (f.quiet) {
       const quietPolicy = row.area.some((a) => /quiet|silent/i.test(a.noise_policy ?? ''))
-      const noise = current?.noise_level_id ?? null
+      const noise = rankings?.noise_level_id ?? null
       if (noise == null ? !quietPolicy : noise > QUIET_NOISE_LEVEL_ID) continue
     }
 
     const photo = latest(row.post.flatMap((p) => p.post_photo), (p) => p.created_at)
     const score =
       0.3 * Math.max(0, 1 - distance / Math.max(opts.radiusMeters, 1)) +
-      (current ? (0.5 * (PACKED_CROWD_LEVEL_ID - current.crowd_level_id)) / (PACKED_CROWD_LEVEL_ID - EMPTY_CROWD_LEVEL_ID) + 0.2 * (1 - age / windowMs) : 0)
+      // Only current rankings score, a stale fallback is for display, not ranking
+      (isCurrent && rankings ? (0.5 * (PACKED_CROWD_LEVEL_ID - rankings.crowd_level_id)) / (PACKED_CROWD_LEVEL_ID - EMPTY_CROWD_LEVEL_ID) + 0.2 * (1 - age / windowMs) : 0)
 
     spots.push({
       location_id: row.location_id,
@@ -142,12 +149,12 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
       street_one: row.address?.street_one ?? null,
       city: row.address?.city ?? null,
       distance_meters: distance,
-      is_current: current != null,
-      crowd_level_id: post?.crowd_level_id ?? null,
-      crowd_level: post?.crowd_level?.label ?? null,
-      noise_level_id: post?.noise_level_id ?? null,
-      noise_level: post?.noise_level?.label ?? null,
-      last_updated_at: post?.created_at ?? null,
+      is_current: isCurrent,
+      crowd_level_id: rankings?.crowd_level_id ?? null,
+      crowd_level: rankings?.crowd_level?.label ?? null,
+      noise_level_id: rankings?.noise_level_id ?? null,
+      noise_level: rankings?.noise_level?.label ?? null,
+      last_updated_at: post?.created_at ?? null, // Uses latest post since rankings may be from different items
       latest_photo_path: photo?.storage_path ?? null,
       latest_photo_url: null,
       score,
@@ -158,4 +165,29 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
     (opts.sort === 'distance' ? 0 : b.score - a.score) || a.distance_meters - b.distance_meters || a.location_id - b.location_id,
   )
   return spots.slice(0, Math.min(Math.max(opts.limit ?? 20, 1), 50))
+}
+
+function getRankings(posts: PostRow[], now: number): [boolean, Rankings | null] {
+  // Posts dated after `now` are ignored everywhere.
+  const pastPosts = posts.filter((p) => Date.parse(p.created_at) <= now)
+  const currentPosts = pastPosts.filter((p) => isRecent(p.created_at, now))
+
+  // If there are no current posts, fall back to the latest post
+  if (currentPosts.length === 0) {
+    return [false, latest(pastPosts, (p) => p.created_at)]
+  }
+
+  // Get the most common individual rankings among current posts, or the latest one if there is a tie
+  const newestFirst = [...currentPosts].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+  const mostCommonValues = getMostCommonValues(newestFirst, ['crowd_level_id', 'noise_level_id']);
+
+  // TODO: Maybe rank basted on how current?
+  const rankings: Rankings | null = mostCommonValues.crowd_level_id !== null ? {
+    crowd_level_id: mostCommonValues.crowd_level_id,
+    noise_level_id: mostCommonValues.noise_level_id,
+    crowd_level: currentPosts.find((p) => p.crowd_level_id === mostCommonValues.crowd_level_id)?.crowd_level ?? null,
+    noise_level: currentPosts.find((p) => p.noise_level_id === mostCommonValues.noise_level_id)?.noise_level ?? null,
+  } : null;
+
+  return [true, rankings];
 }

@@ -63,7 +63,7 @@ function accessibilityLabel(spot: SpotCardData, rank: number | undefined, now: n
 
 /** A spot in a list: rank, name, distance, crowdedness and noise, and how fresh that is. */
 export function SpotCard({ spot, rank, onPress, now = Date.now(), className = '' }: SpotCardProps) {
-  const showCrowdStatus = isCurrent(spot, now) && spot.crowd_level_id != null;
+  const showCrowdStatus = spot.crowd_level_id != null;
 
   return (
     <Pressable
