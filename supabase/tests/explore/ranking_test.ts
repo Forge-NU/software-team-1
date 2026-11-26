@@ -69,12 +69,22 @@ Deno.test('rankSpots', async (t) => {
     assertEquals(names(result).sort(), ['Policy Quiet', 'Quiet Cafe'])
   })
 
-  await t.step('a 3-hour-old packed post is not current', () => {
+  await t.step('a 3-hour-old packed post is not current but still shows its rating', () => {
     const [result] = rankSpots([spot('Snell', { posts: [post(180, 5, 5)] })], HERE)
     assertEquals(result.is_current, false)
-    assertEquals(result.crowd_level, null)
-    assertEquals(result.noise_level, null)
+    assertEquals(result.crowd_level, 'Packed')
+    assertEquals(result.noise_level, 'Very loud')
     assertEquals(result.last_updated_at, post(180, 5, 5).created_at)
+  })
+
+  await t.step('a stale post scores like no post, so the spot is not pushed past the limit', () => {
+    const rows = [
+      spot('Stale', { lat: 42.3381, lng: -71.0881, posts: [post(7 * 24 * 60, 1, 1)] }),
+      spot('No Posts', { lat: 42.36, lng: -71.06 }),
+    ]
+    const result = rankSpots(rows, { ...HERE, limit: 1 })
+    assertEquals(names(result), ['Stale'])
+    assertEquals(result[0].score >= 0, true)
   })
 
   await t.step('latest recent post wins and spots without posts still appear', () => {

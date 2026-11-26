@@ -1,8 +1,7 @@
 // Display helpers for spot cards, map callouts and spot detail. Pure, no React.
 
-import { RECENT_MINUTES } from './exploreRanking'
-
 const METERS_PER_MILE = 1609.344
+export const RECENT_MINUTES = 90
 
 /** "0.3 mi". With `long`, "0.3 miles" for screen readers. */
 export function formatDistance(meters: number, long = false): string {
