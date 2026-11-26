@@ -6,15 +6,8 @@ import { colors, typography } from '../theme';
 
 const SIZE = 48;
 
-/** iOS 26+ with Liquid Glass on (false on Android, older iOS, or with the compatibility setting) */
 const liquidGlass = isLiquidGlassAvailable();
 
-/**
- * Round Filters button for the Explore sheet's header, with a count badge while filters are on.
- * - iOS 26+: an interactive Liquid Glass button, which grows and shimmers while pressed like the
- *   system's own glass buttons, tinted while filters are on.
- * - Elsewhere: a white circle with a border (Material "filter_list" and a ripple on Android).
- */
 export default function SheetFilterButton({
     activeCount,
     onPress,
@@ -44,7 +37,7 @@ export default function SheetFilterButton({
     );
 
     return (
-        // The badge sits outside the glass, so the glass's rounded clip doesn't cut it off
+        // Badge outside the glass, so its clip doesn't cut it off
         <View style={styles.container}>
             {liquidGlass ? (
                 <GlassView

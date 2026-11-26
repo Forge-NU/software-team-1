@@ -66,10 +66,7 @@ function reportedAgo(iso: string): string {
     return `Reported ${days} day${days === 1 ? '' : 's'} ago`
 }
 
-/**
- * Searches spots and buildings by name as `query` changes (debounced), ranked by distance from
- * the user. Only searches once `enabled`, since finding the user's location can ask for permission.
- */
+/** `enabled` delays the location lookup, which can ask for permission */
 export function useSpotSearch(query: string, enabled = true) {
     const [results, setResults] = useState<SpotSummary[]>([])
     const [loading, setLoading] = useState(false)
@@ -83,8 +80,6 @@ export function useSpotSearch(query: string, enabled = true) {
         isFallback: true,
     })
 
-    // Get the user's location when Search opens. It can ask for location permission,
-    // so it waits until search is actually in use.
     useEffect(() => {
         if (!enabled) return
         let active = true
@@ -159,7 +154,6 @@ export function useSpotSearch(query: string, enabled = true) {
     }
 }
 
-/** Shared Figma-style search result card */
 export function SpotSearchResult({
     spot,
     onPress,
@@ -254,10 +248,7 @@ export function SpotSearchResult({
     )
 }
 
-/**
- * What a search shows in place of results while it's loading, when it fails, or when nothing
- * matches. Renders nothing when there are results to show.
- */
+/** Loading, error and no-results states; renders nothing when there are results */
 export function SpotSearchStatus({
     query,
     loading,

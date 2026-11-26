@@ -29,7 +29,6 @@ const METERS_PER_DEGREE = 111_000;
 
 const BORDER_RADIUS = 24;
 
-/** The map as a Reanimated component, so its padding can follow a bottom sheet frame by frame */
 const AnimatedMapView = Animated.createAnimatedComponent(MapView);
 
 interface MapViewComponentProps<T extends MapSpot> {
@@ -40,13 +39,9 @@ interface MapViewComponentProps<T extends MapSpot> {
     /** Additional styles for the map's container (e.g. border and shadow) */
     style?: StyleProp<ViewStyle>;
     interactive?: boolean;
-    /** Rounded corners and a card look. Turn off for a map that fills the screen. Defaults to true */
+    /** Defaults to true */
     rounded?: boolean;
-    /**
-     * Space covered by UI drawn over the map (e.g. a bottom sheet). The map keeps its logo,
-     * centering and the OSM credit inside the uncovered area. `bottom` can be a shared value
-     * (e.g. a sheet's live position), so they follow the sheet while it's dragged.
-     */
+    /** Space covered by UI over the map (e.g. a sheet), kept clear of the logo, credit and centering */
     insets?: { top?: number; bottom?: number | SharedValue<number> };
     /** Handles pressing on a location */
     onLocationPress?: (l: T) => void;
@@ -56,7 +51,6 @@ export default function MapViewComponent<T extends MapSpot>(props: MapViewCompon
     const rounded = props.rounded ?? true;
     const top = props.insets?.top ?? 0;
 
-    // The bottom inset as a shared value either way, so the padding and credit update on the UI thread
     const providedBottom = props.insets?.bottom;
     const fixedBottom = useSharedValue(typeof providedBottom === 'number' ? providedBottom : 0);
     useEffect(() => {
@@ -64,8 +58,7 @@ export default function MapViewComponent<T extends MapSpot>(props: MapViewCompon
     }, [providedBottom, fixedBottom]);
     const bottom = isSharedValue<number>(providedBottom) ? providedBottom : fixedBottom;
 
-    // Apple Maps already keeps its logo and centering clear of the safe area (status bar, tab bar)
-    // when the map runs under it, so only pad by the rest. Google Maps on Android doesn't.
+    // Apple Maps already pads for the safe area; Google Maps doesn't
     const safeArea = useSafeAreaInsets();
     const subtractSafeArea = !!props.insets && Platform.OS === 'ios';
     const safeTop = subtractSafeArea ? safeArea.top : 0;

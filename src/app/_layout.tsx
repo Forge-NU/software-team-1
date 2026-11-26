@@ -29,7 +29,6 @@ const DEV_SKIP_AUTH = __DEV__ && process.env.EXPO_PUBLIC_DEV_SKIP_AUTH === 'true
 
 export default function RootLayout() {
   return (
-    // Gesture handler root: needed by the Explore results sheet (@gorhom/bottom-sheet)
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <ProfileProvider>

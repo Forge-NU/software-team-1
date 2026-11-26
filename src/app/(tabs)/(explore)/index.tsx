@@ -6,7 +6,6 @@ import ExploreScreen from '@/screens/ExploreScreen';
 export default function ExploreRoute() {
   return (
     <>
-      {/* No header: the map fills the screen, and search and Filters live in the results sheet */}
       <Stack.Screen options={{ headerShown: false }} />
       <ExploreScreen
         onOpenFilters={() => router.push('/filters')}

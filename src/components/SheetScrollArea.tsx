@@ -17,20 +17,17 @@ import Animated, {
     type SharedValue,
 } from 'react-native-reanimated';
 
-/** How close to the top or bottom of the list still counts as being there */
 const EDGE_SLOP = 1;
-/** How far the finger moves toward the edge, while the list is there, before the sheet takes over */
+/** How far the finger moves toward an edge, with the list at it, before the sheet takes over */
 const HANDOFF_DISTANCE = 2;
 
 type PanEvent = GestureStateChangeEvent<PanGestureHandlerEventPayload>;
 type PanChangeEvent = GestureUpdateEvent<PanGestureHandlerEventPayload & PanGestureChangeEventPayload>;
 
 interface SheetScrollAreaProps {
-    /** The sheet's live index (gorhom's animatedIndex) */
+    /** gorhom's animatedIndex */
     animatedIndex: SharedValue<number>;
-    /** The sheet's tallest snap point index */
     maxIndex: number;
-    /** Turn off dragging the sheet from the list, e.g. while it's locked at full height */
     sheetDragEnabled?: boolean;
     style?: StyleProp<ViewStyle>;
     contentContainerStyle?: StyleProp<ViewStyle>;
@@ -40,14 +37,9 @@ interface SheetScrollAreaProps {
 }
 
 /**
- * A scroll view for a gorhom bottom sheet whose content panning is turned off, that behaves like an
- * iOS sheet's list: dragging it scrolls the list at any sheet height, with the usual bounce. When
- * the finger is dragging down with the list at its top (or up with it at its bottom), whether from
- * the start of the drag or after scrolling there, the sheet takes over and follows the finger.
- * A fling that reaches the end after the finger lifts just bounces, and never moves the sheet.
- *
- * The sheet is moved with gorhom's own handle gesture handlers, so it tracks the finger and snaps
- * exactly as it does when dragged by its handle. Must be rendered inside the BottomSheet.
+ * Scroll view for a gorhom sheet with content panning off. It scrolls at any sheet height, and hands
+ * the drag to the sheet once the finger pushes past the list's top or bottom (flings never do).
+ * Must be inside the BottomSheet.
  */
 export default function SheetScrollArea({
     animatedIndex,
@@ -62,13 +54,11 @@ export default function SheetScrollArea({
     const { handlePanGestureHandler } = useBottomSheetGestureHandlers();
     const scrollRef = useAnimatedRef<Animated.ScrollView>();
 
-    // The list's scroll position and how far it can scroll, kept on the UI thread
     const scrollY = useSharedValue(0);
     const viewportHeight = useSharedValue(0);
     const contentHeight = useSharedValue(0);
 
-    // While the sheet is following the finger, the list is held at this offset (its top or bottom),
-    // so it doesn't scroll or bounce at the same time
+    // While the sheet follows the finger, the list is held at this edge so it doesn't scroll too
     const sheetDragging = useSharedValue(false);
     const heldOffset = useSharedValue(0);
 
@@ -82,12 +72,10 @@ export default function SheetScrollArea({
         scrollY.value = event.contentOffset.y;
     });
 
-    // The finger's last position, and how far it has moved toward an edge while the list is there
     const lastY = useSharedValue(0);
     const pullDown = useSharedValue(0);
     const pushUp = useSharedValue(0);
-    // The pan's translation when the sheet took over: the sheet moves by what comes after it, so a
-    // handoff partway through a drag doesn't make it jump by the distance already scrolled
+    // So a mid-drag handoff doesn't make the sheet jump by the distance already scrolled
     const translationAtHandoff = useSharedValue(0);
 
     const scrollGesture = Gesture.Native();
@@ -117,7 +105,6 @@ export default function SheetScrollArea({
             const canShrink = animatedIndex.value > 0.01;
             const canGrow = animatedIndex.value < maxIndex - 0.01;
 
-            // Count movement toward an edge only while the list is at it; anything else resets
             pullDown.value = atTop && canShrink && dy > 0 ? pullDown.value + dy : 0;
             pushUp.value = atBottom && canGrow && dy < 0 ? pushUp.value - dy : 0;
 
@@ -156,7 +143,6 @@ export default function SheetScrollArea({
                     ...event,
                     translationY: event.translationY - translationAtHandoff.value,
                 });
-                // The list was held here while the sheet moved
                 scrollY.value = heldOffset.value;
             }
             sheetDragging.value = false;

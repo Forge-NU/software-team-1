@@ -44,16 +44,13 @@ type ExploreScreenProps = {
     longitude?: number;
 };
 
-/** The sheet starts at its middle height: half the screen, showing the first few spots */
 const DEFAULT_SNAP = 1;
-/** Full height: where the sheet goes, and stays, while searching */
 const FULL_SNAP = 2;
 
 /**
- * The sheet's header (grabber, search, Filters, chips) is rendered as gorhom's *handle*, so dragging
- * anywhere on it moves the sheet. gorhom takes the handle as a component type, which has to stay the
- * same between renders (a new one would remount the header and drop the search field's focus), so
- * this fixed component gets the header itself from context.
+ * The header is gorhom's handle, so dragging anywhere on it moves the sheet. The handle component
+ * must stay the same between renders (a new one drops the search field's focus), so the header
+ * comes from context.
  */
 const SheetHeaderContext = createContext<{ header: ReactNode; onLayout: (e: LayoutChangeEvent) => void } | null>(null);
 
@@ -91,42 +88,32 @@ export default function ExploreScreen({
     const sheet = useRef<BottomSheet>(null);
     const snapIndex = useRef(DEFAULT_SNAP);
 
-    // The screen's height, and the sheet header's (grabber included), both measured on layout
     const [screenHeight, setScreenHeight] = useState(0);
     const [headerHeight, setHeaderHeight] = useState(0);
     const handleHeaderLayout = useCallback((e: LayoutChangeEvent) => setHeaderHeight(e.nativeEvent.layout.height), []);
-    // Whether search is open (Cancel showing, results for any text), and whether its field has focus.
-    // The sheet is locked at full height only while the field has focus (see startSearch below).
+    // Search stays open (Cancel, results) until Cancel; the sheet is only locked while focused
     const [searchActive, setSearchActive] = useState(false);
     const [searchFocused, setSearchFocused] = useState(false);
 
-    // How far the tab bar covers the bottom of the screen. On iOS the screen runs under the glass
-    // tab bar, so the sheet does too and needs room for it; each tab's safe area includes the tab
-    // bar there. On Android the screen already ends above the tab bar.
+    // iOS screens run under the glass tab bar (included in the safe area); Android's end above it
     const tabBarOverlap = Platform.OS === 'ios' ? insets.bottom : 0;
 
-    // The list fades out as the sheet shrinks to its smallest height, so only the search bar
-    // shows above the tab bar instead of the list peeking through the glass
+    // Fade the list out at the smallest height, so it doesn't show through the tab bar
     const animatedIndex = useSharedValue(DEFAULT_SNAP);
     const listFade = useAnimatedStyle(() => ({
         opacity: interpolate(animatedIndex.value, [0, 0.6], [0, 1], Extrapolation.CLAMP),
     }));
 
-    // Sheet heights, smallest first:
-    // - just the header (search, Filters and chips) above the tab bar, so most of the map shows
-    // - half the screen, the default, with the first few spots
-    // - full height, for browsing the list (stops below the status bar via topInset)
+    // Just the header (above the tab bar), half, and full
     const snapPoints = useMemo(
         () => [Math.max(headerHeight + tabBarOverlap, 120), '50%', '100%'],
         [headerHeight, tabBarOverlap],
     );
 
-    // How much of the map the sheet covers, live while it's dragged, so the map keeps its logo and
-    // credit just above it. gorhom's animatedPosition is the sheet's top, measured from the top of the
-    // screen. Capped at half the screen: past that there's little map left to keep things in.
+    // Map area covered by the sheet, capped at half the screen
     const sheetPosition = useSharedValue(0);
     const sheetCover = useDerivedValue(() => {
-        // Before the sheet lays out: its default '50%' height, which gorhom takes from below topInset
+        // Before layout: gorhom's '50%' is measured below topInset
         if (sheetPosition.value <= 0) return (screenHeight - insets.top) * 0.5;
         return Math.min(screenHeight - sheetPosition.value, screenHeight * 0.5);
     });
@@ -134,19 +121,14 @@ export default function ExploreScreen({
         snapIndex.current = index;
     };
 
-    // F-11: Search, right in the sheet. Focusing the field starts searching and takes the sheet to full
-    // height, where it stays while the field has focus. Once the keyboard is put away (e.g. by
-    // scrolling the results), the sheet can be dragged again, and the results stay until Cancel.
-    // Until there's text, the usual list shows.
+    // F-11: Search
     const [query, setQuery] = useState('');
     const trimmedQuery = query.trim();
     const showingResults = searchActive && trimmedQuery.length > 0;
     const search = useSpotSearch(query, searchActive);
-    // The height to go back to after Cancel
     const snapBeforeSearch = useRef(DEFAULT_SNAP);
 
     const startSearch = () => {
-        // Cancel goes back to the height from before search first opened, not before a later refocus
         if (!searchActive) {
             snapBeforeSearch.current = snapIndex.current;
             setSearchActive(true);
@@ -157,8 +139,7 @@ export default function ExploreScreen({
 
     const cancelSearch = useCallback(() => {
         const index = snapBeforeSearch.current;
-        // As the keyboard closes, gorhom moves the sheet back to where it was when the keyboard
-        // opened (full height), which would undo this move, so wait for it to finish closing first
+        // gorhom moves the sheet as the keyboard closes, which would undo this, so wait for it
         if (Keyboard.isVisible()) {
             const sub = Keyboard.addListener('keyboardDidHide', () => {
                 sub.remove();
@@ -167,14 +148,14 @@ export default function ExploreScreen({
         } else {
             sheet.current?.snapToIndex(index);
         }
-        // Takes focus from the field even when no on-screen keyboard is up (e.g. a hardware keyboard)
+        // Also blurs the field with a hardware keyboard
         Keyboard.dismiss();
         setQuery('');
         setSearchActive(false);
         setSearchFocused(false);
     }, []);
 
-    // Android back: leaves search, then shrinks an expanded sheet, then leaves as usual
+    // Android back: leaves search, then shrinks the sheet, then leaves
     useFocusEffect(
         useCallback(() => {
             const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -195,7 +176,6 @@ export default function ExploreScreen({
     const header = (
         <View style={styles.header}>
             <View style={styles.searchRow}>
-                {/* F-11: Search field. gorhom's text input keeps the sheet in step with the keyboard. */}
                 <View style={styles.searchField}>
                     <Feather name="search" size={20} color={colors.textSecondary} />
                     <BottomSheetTextInput
@@ -223,7 +203,6 @@ export default function ExploreScreen({
                     )}
                 </View>
 
-                {/* While searching, Cancel takes the Filters button's place */}
                 {searchActive ? (
                     <Pressable
                         onPress={cancelSearch}
@@ -235,12 +214,11 @@ export default function ExploreScreen({
                         <Text style={styles.cancelText}>Cancel</Text>
                     </Pressable>
                 ) : (
-                    /* Filters: opens the Filters sheet */
                     <SheetFilterButton activeCount={activeChips.length} onPress={onOpenFilters} />
                 )}
             </View>
 
-            {/* Active filter chips. Hidden while showing search results, which filters don't narrow. */}
+            {/* Filters don't apply to search results */}
             {filtersActive && !showingResults && (
                 <ScrollView
                     horizontal
@@ -257,7 +235,7 @@ export default function ExploreScreen({
                             accessibilityLabel={`Remove ${chip.label} filter`}
                         >
                             <Text style={styles.activeChipText}>{chip.label}</Text>
-                            {/* An icon rather than a "×" character, which sits low in this font */}
+                            {/* Icon, since "×" sits low in this font */}
                             <Feather name="x" size={12} color={colors.textOnPrimaryLight} />
                         </TouchableOpacity>
                     ))}
@@ -274,7 +252,6 @@ export default function ExploreScreen({
 
     return (
         <View style={styles.container} onLayout={(e) => setScreenHeight(e.nativeEvent.layout.height)}>
-            {/* Map of the spots matching the current filters, behind everything */}
             <MapViewComponent
                 height="100%"
                 rounded={false}
@@ -283,8 +260,6 @@ export default function ExploreScreen({
                 onLocationPress={(spot) => onOpenSpot(spot.location_id)}
             />
 
-            {/* Results sheet, like Apple Maps / Google Maps. It's part of this screen, so it sits above
-                the tab bar, can't be swiped away, and leaves the map usable behind it. */}
             {screenHeight > 0 && (
                 <SheetHeaderContext.Provider value={{ header, onLayout: handleHeaderLayout }}>
                     <BottomSheet
@@ -295,13 +270,11 @@ export default function ExploreScreen({
                         enablePanDownToClose={false}
                         topInset={insets.top}
                         onChange={handleSheetChange}
-                        // Dragging moves the sheet from the header only; the list scrolls first and hands
-                        // off to the sheet at its ends (see SheetScrollArea). While the search field
-                        // has focus, nothing moves it, so it stays at full height.
+                        // Content drags are handled by SheetScrollArea
                         handleComponent={SheetHandle}
                         enableHandlePanningGesture={!searchFocused}
                         enableContentPanningGesture={false}
-                        // Sideways swipes (e.g. on the filter chips) scroll instead of dragging the sheet
+                        // Let sideways swipes scroll the filter chips
                         activeOffsetY={[-6, 6]}
                         failOffsetX={[-12, 12]}
                         keyboardBehavior="extend"
@@ -318,7 +291,6 @@ export default function ExploreScreen({
                                 maxIndex={FULL_SNAP}
                                 sheetDragEnabled={!searchFocused}
                                 contentContainerStyle={[styles.list, { paddingBottom: spacing.xl + tabBarOverlap }]}
-                                // Results stay tappable with the keyboard up, and scrolling puts it away
                                 keyboardShouldPersistTaps="handled"
                                 keyboardDismissMode="on-drag"
                             >
@@ -393,7 +365,7 @@ const styles = StyleSheet.create({
 
     listArea: { flex: 1 },
 
-    // Drawn by SheetHandle, matching gorhom's default handle
+    // Matches gorhom's default handle
     grabber: {
         alignSelf: 'center',
         width: 36,
@@ -404,7 +376,6 @@ const styles = StyleSheet.create({
         backgroundColor: colors.textPlaceholder,
     },
 
-    // Sheet header: stays put while the list scrolls. Also sets the smallest sheet height.
     header: {
         paddingTop: spacing.xxs,
         paddingBottom: spacing.sm,
@@ -478,10 +449,9 @@ const styles = StyleSheet.create({
 
     activeChipText: {
         ...typography.tag,
-        // tag's lineHeight equals its fontSize, which is shorter than Afacad's glyph box, so the
-        // letters get pushed to the top of the line and sit above the centered X icon
+        // tag's lineHeight is shorter than Afacad's glyphs, which pushes them above the X icon
         lineHeight: 16,
-        // Afacad's letters also sit a little high in their line on iOS; nudge them down to center
+        // Afacad also sits a little high on iOS
         ...Platform.select({ ios: { transform: [{ translateY: 1 }] }, default: {} }),
         color: colors.textOnPrimaryLight,
     },
