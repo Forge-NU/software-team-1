@@ -15,6 +15,7 @@ import {
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { FiltersProvider } from '@/context/FiltersContext';
+import { DisplayNamePrompt } from '@/components/DisplayNamePrompt';
 import { ProfileProvider } from '@/context/ProfileContext';
 import { useWelcomeSeen } from '@/lib/onboarding';
 import { stackScreenOptions } from '@/theme/navigation';
@@ -32,6 +33,7 @@ export default function RootLayout() {
       <ProfileProvider>
         <FiltersProvider>
           <RootNavigator />
+          <DisplayNamePrompt />
           <StatusBar style="dark" />
         </FiltersProvider>
       </ProfileProvider>

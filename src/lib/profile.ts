@@ -70,6 +70,12 @@ export async function updateDisplayName(name: string): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('You are signed out. Sign in again to continue.')
 
+  const normalized = trimmed.toLowerCase()
+  const email = user.email?.toLowerCase()
+  if (normalized === 'student' || (email && (normalized === email || normalized === email.split('@')[0]))) {
+    throw new Error('Choose a display name that is not your email, email prefix, or Student.')
+  }
+
   const { error } = await supabase.from('users').update({ name: trimmed }).eq('user_id', user.id)
   if (error) throw error
   return trimmed

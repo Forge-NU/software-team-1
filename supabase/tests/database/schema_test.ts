@@ -27,7 +27,7 @@ Deno.test('lookup data is seeded', () =>
   }))
 
 Deno.test('users', async (t) => {
-  await t.step('a profile is created on sign-up, using metadata name or the email prefix', () =>
+  await t.step('a profile is created on sign-up, using metadata name or a neutral default', () =>
     withDb(async (db) => {
       await seed(db)
       const rows = await db.query<{ user_id: string; name: string; user_type: string }>(
@@ -36,7 +36,18 @@ Deno.test('users', async (t) => {
       assertEquals(rows, [
         { user_id: ADMIN, name: 'Ada Admin', user_type: 'admin' },
         { user_id: STUDENT, name: 'Sam Student', user_type: 'student' },
-        { user_id: OTHER_STUDENT, name: 'other', user_type: 'student' },
+        { user_id: OTHER_STUDENT, name: 'Student', user_type: 'student' },
+      ])
+    }))
+
+  await t.step('email-derived and blank signup names use a neutral default', () =>
+    withDb(async (db) => {
+      await db.query(`insert into auth.users (id, email, raw_user_meta_data) values
+        ($1, 'prefix@northeastern.edu', '{"name":" PREFIX "}'),
+        ($2, 'full@northeastern.edu', '{"name":"full@northeastern.edu"}'),
+        ($3, 'blank@northeastern.edu', '{"name":"   "}')`, [ADMIN, STUDENT, OTHER_STUDENT])
+      assertEquals(await db.query('select name from public.users order by user_id'), [
+        { name: 'Student' }, { name: 'Student' }, { name: 'Student' },
       ])
     }))
 
@@ -97,8 +108,17 @@ Deno.test('users', async (t) => {
         db.as(STUDENT).query(`insert into public.users (user_id, name, email) values (gen_random_uuid(), 'x', 'x@x')`),
         INSUFFICIENT_PRIVILEGE,
       )
-      assertEquals(await db.as(null).query('select * from public.users'), [])
-      assertEquals((await db.as(STUDENT).query('select * from public.users')).length, 3)
+      await assertPgError(db.as(null).query('select name from public.users'), INSUFFICIENT_PRIVILEGE)
+      assertEquals((await db.as(STUDENT).query('select user_id, name, created_at from public.users')).length, 3)
+      await assertPgError(db.as(STUDENT).query('select * from public.users'), INSUFFICIENT_PRIVILEGE)
+      await assertPgError(
+        db.as(STUDENT).query('select email from public.users where user_id = $1', [OTHER_STUDENT]),
+        INSUFFICIENT_PRIVILEGE,
+      )
+      await assertPgError(
+        db.as(STUDENT).query('select email from public.users where user_id = $1', [STUDENT]),
+        INSUFFICIENT_PRIVILEGE,
+      )
     }))
 
   await t.step('deleting an auth user removes their profile and content', () =>
