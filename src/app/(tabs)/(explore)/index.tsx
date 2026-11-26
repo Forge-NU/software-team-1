@@ -10,7 +10,6 @@ export default function ExploreRoute() {
 
   return (
     <>
-      {/* Filters lives in the header's top right; it opens the Filters sheet */}
       <Stack.Screen
         options={{
           headerRight: () => (

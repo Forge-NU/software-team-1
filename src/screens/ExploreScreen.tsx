@@ -81,7 +81,6 @@ export default function ExploreScreen({
                     onLocationPress={(spot) => onOpenSpot(spot.location_id)}
                 />
             </View>
-            {/* Active filter chips (the Filters button is in the header) */}
             {activeChips.length > 0 && (
                 <ScrollView
                     horizontal
@@ -100,7 +99,7 @@ export default function ExploreScreen({
                             <Text style={styles.activeChipText}>
                                 {chip.label}
                             </Text>
-                            {/* An icon rather than a "×" character, which sits low in this font */}
+                            {/* Icon, since "×" sits low in this font */}
                             <Feather
                                 name="x"
                                 size={12}
@@ -214,10 +213,9 @@ const styles = StyleSheet.create({
 
     activeChipText: {
         ...typography.tag,
-        // tag's lineHeight equals its fontSize, which is shorter than Afacad's glyph box, so the
-        // letters get pushed to the top of the line and sit above the centered X icon
+        // tag's lineHeight is shorter than Afacad's glyphs, which pushes them above the X icon
         lineHeight: 16,
-        // Afacad's letters also sit a little high in their line on iOS; nudge them down to center
+        // Afacad also sits a little high on iOS
         ...Platform.select({ ios: { transform: [{ translateY: 1 }] }, default: {} }),
         color: colors.textOnPrimaryLight,
     },

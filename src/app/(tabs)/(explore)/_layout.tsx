@@ -5,9 +5,7 @@ import { TabStack } from '@/components/TabStack';
 export default function ExploreLayout() {
   return (
     <TabStack title="Explore">
-      {/* Filters opens as a sheet. Swipe-down is off so the only ways out are the
-          close button (discard) and "Show results" (apply). Android's back button
-          still closes it, which also discards. */}
+      {/* No swipe-down, so closing is an explicit discard (X) or apply (Show spots) */}
       <Stack.Screen
         name="filters"
         options={{ presentation: 'modal', gestureEnabled: false, headerBackVisible: false }}

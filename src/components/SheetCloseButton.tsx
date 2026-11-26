@@ -3,12 +3,6 @@ import { Platform, Pressable, StyleSheet } from 'react-native'
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
 import { colors } from '../theme'
 
-/**
- * Close (X) button for a sheet's native header, styled per platform:
- * - iOS: thin "xmark"-style icon for `headerRight`; iOS 26 draws the glass bubble around it.
- * - Android: Material "close" icon with a round ripple, for `headerLeft` (Material full-screen dialog).
- * Use `sheetCloseOptions(onClose)` to put it on the expected side for each platform.
- */
 export default function SheetCloseButton({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
@@ -28,7 +22,7 @@ export default function SheetCloseButton({ onPress }: { onPress: () => void }) {
   )
 }
 
-/** Header options that place the close button top-right on iOS and top-left elsewhere. */
+/** Puts the close button where each platform expects it: top-right on iOS, top-left on Android */
 export function sheetCloseOptions(onClose: () => void) {
   const button = () => <SheetCloseButton onPress={onClose} />
   return Platform.OS === 'ios' ? { headerRight: button } : { headerLeft: button }

@@ -83,8 +83,7 @@ export default function FiltersScreen({
     onFiltersChange,
     onApply,
 }: FiltersScreenProps) {
-    // The footer clears the home indicator (or keeps a small margin on devices without one);
-    // the native header covers the top
+    // The footer clears the home indicator; the native header covers the top
     const { bottom } = useSafeAreaInsets();
 
     // Stores the currently selected options
@@ -148,7 +147,7 @@ export default function FiltersScreen({
         }));
     };
 
-    // Clears the sheet's selections; nothing is applied until Show spots
+    // Nothing is applied until Show spots
     const resetFilters = () => {
         setFilters({
             ...emptyFilters,
@@ -298,7 +297,6 @@ export default function FiltersScreen({
                 </View>
             </ScrollView>
 
-            {/* Reset and Show spots */}
             <View style={[styles.footer, { paddingBottom: bottom }]}>
                 <View style={styles.actions}>
                     <TouchableOpacity
