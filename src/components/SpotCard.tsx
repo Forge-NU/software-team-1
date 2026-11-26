@@ -40,9 +40,9 @@ function isCurrent(spot: SpotCardData, now: number) {
 }
 
 function updatedText(spot: SpotCardData, now: number, long = false) {
-  if (!spot.last_updated_at) return 'No updates yet';
+  if (!spot.last_updated_at) return 'Updates never. Check in to be the first!';
   const ago = formatTimeAgo(spot.last_updated_at, now, long);
-  return isCurrent(spot, now) ? `Updated ${ago}` : `Last update ${ago}`;
+  return `Updated ${ago}`;
 }
 
 function accessibilityLabel(spot: SpotCardData, rank: number | undefined, now: number) {
@@ -63,7 +63,7 @@ function accessibilityLabel(spot: SpotCardData, rank: number | undefined, now: n
 
 /** A spot in a list: rank, name, distance, crowdedness and noise, and how fresh that is. */
 export function SpotCard({ spot, rank, onPress, now = Date.now(), className = '' }: SpotCardProps) {
-  const showStatus = isCurrent(spot, now) && spot.crowd_level_id != null;
+  const showCrowdStatus = isCurrent(spot, now) && spot.crowd_level_id != null;
 
   return (
     <Pressable
@@ -74,13 +74,6 @@ export function SpotCard({ spot, rank, onPress, now = Date.now(), className = ''
       onPress={onPress ? () => onPress(spot.location_id) : undefined}
       className={`flex-row gap-sm rounded-lg border border-border bg-surface p-md active:opacity-80 ${className}`}
     >
-      {rank != null && (
-        <View className="h-8 w-8 items-center justify-center rounded-pill bg-primaryLight">
-          <Text variant="label" color="textOnPrimaryLight">
-            {rank}
-          </Text>
-        </View>
-      )}
 
       <View className="flex-1 gap-xs">
         <View className="flex-row items-center gap-xs">
@@ -92,14 +85,11 @@ export function SpotCard({ spot, rank, onPress, now = Date.now(), className = ''
           </Text>
         </View>
 
-        {showStatus ? (
-          <View className="flex-row flex-wrap items-center gap-sm">
-            <CrowdBadge levelId={spot.crowd_level_id!} />
+        <View className="flex-row flex-wrap items-center gap-sm">
+            {showCrowdStatus ? <CrowdBadge levelId={spot.crowd_level_id!} /> : <NoRecentUpdatesBadge />}
             {spot.noise_level_id != null && <NoiseTag levelId={spot.noise_level_id} label={spot.noise_level} />}
-          </View>
-        ) : (
-          <NoRecentUpdatesBadge />
-        )}
+        </View>
+        
 
         <Text variant="caption" color="textSecondary">
           {updatedText(spot, now)}
