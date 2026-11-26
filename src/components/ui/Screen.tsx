@@ -1,4 +1,4 @@
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { PropsWithChildren, ReactElement, ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,10 +11,19 @@ interface ScreenProps extends PropsWithChildren {
   padBottom?: boolean;
   /** Classes for the content area, e.g. "gap-md pt-xl" */
   contentClassName?: string;
+  /** Passed to the ScrollView when scroll is true (e.g. pull-to-refresh). */
+  refreshControl?: ReactElement;
 }
 
 /** Page wrapper: background color, optional header, gutter on both sides. */
-export function Screen({ header, scroll = false, padBottom = false, contentClassName = '', children }: ScreenProps) {
+export function Screen({
+  header,
+  scroll = false,
+  padBottom = false,
+  contentClassName = '',
+  refreshControl,
+  children,
+}: ScreenProps) {
   const insets = useSafeAreaInsets();
   const bottom = { paddingBottom: padBottom ? insets.bottom : 0 };
   const contentClass = `px-gutter ${contentClassName}`;
@@ -34,6 +43,7 @@ export function Screen({ header, scroll = false, padBottom = false, contentClass
           // Keep vertical bounce on (the default): iOS only applies these insets when the
           // page counts as scrollable, so turning it off leaves short pages under the header
           contentInsetAdjustmentBehavior="automatic"
+          refreshControl={refreshControl}
         >
           {children}
         </ScrollView>

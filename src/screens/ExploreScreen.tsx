@@ -1,6 +1,7 @@
-
+import { useState } from 'react';
 import { Feather } from '@expo/vector-icons';
 import {
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
@@ -50,12 +51,32 @@ export default function ExploreScreen({
         latitude,
         longitude,
     });
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        try {
+            await refresh();
+        } finally {
+            setRefreshing(false);
+        }
+    };
 
     return (
         // One scroll for the whole page (search, map, chips, results). The tab's native header
         // shows the title, and iOS insets the content for the glass header and tab bar, so it
         // starts below the header and the last card can still scroll clear of the tab bar
-        <ScrollView style={styles.container} contentInsetAdjustmentBehavior="automatic">
+        <ScrollView
+            style={styles.container}
+            contentInsetAdjustmentBehavior="automatic"
+            refreshControl={
+                <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor={colors.primaryDark}
+                />
+            }
+        >
             {/* F-11: Search bar */}
             <TouchableOpacity
                 style={styles.searchButton}

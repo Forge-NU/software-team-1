@@ -1,4 +1,5 @@
-import { ActivityIndicator, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, RefreshControl, View } from 'react-native';
 
 import { FormMessage } from '@/components/FormMessage';
 import { SpotCard } from '@/components/SpotCard';
@@ -15,6 +16,16 @@ interface SavedScreenProps {
 export default function SavedScreen({ onOpenSpot, onFindSpots }: SavedScreenProps) {
   const { spots, loading, error, refresh } = useSavedSpots();
   const now = useNow();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   let body;
   if (loading) {
@@ -46,7 +57,13 @@ export default function SavedScreen({ onOpenSpot, onFindSpots }: SavedScreenProp
   }
 
   return (
-    <Screen scroll contentClassName="gap-lg py-xl">
+    <Screen
+      scroll
+      contentClassName="gap-lg py-xl"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primaryDark} />
+      }
+    >
       <View className="gap-xxs">
         <Text variant="title" accessibilityRole="header">
           Your go-to study spots.
