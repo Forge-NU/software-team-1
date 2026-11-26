@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 
+import { ALREADY_REPORTED, reportPost } from '../lib/flags';
 import { getLocation, getSeatingInfo } from '../lib/places';
 import type { SeatingInfo } from '../lib/places';
 import { deletePost, getRecentPhotos } from '../lib/posts';
@@ -9,7 +10,10 @@ import { getPostsWithVotes, setVote } from '../lib/votes';
 import type { PostWithVotes, VoteValue } from '../lib/votes';
 import type { Location } from '../types/location';
 
-/** Loads everything the spot screen shows, and handles voting on its updates. */
+/** Reporting twice isn't an error for the user, so it comes back as its own result. */
+export type ReportResult = 'reported' | 'already_reported';
+
+/** Loads everything the spot screen shows, and handles voting on, reporting and deleting its updates. */
 export function useSpotDetails(locationId: number) {
   const [location, setLocation] = useState<Location | null>(null);
   const [posts, setPosts] = useState<PostWithVotes[]>([]);
@@ -107,5 +111,17 @@ export function useSpotDetails(locationId: number) {
     setPhotos((current) => current.filter((photo) => photo.post_id !== postId));
   }
 
-  return { location, posts, photos, seating, loading, vote, removePost };
+  /** Reports a post. Throws on any other failure, so the sheet can offer a retry. */
+  async function report(postId: number, reason: string): Promise<ReportResult> {
+    try {
+      await reportPost(postId, reason);
+      return 'reported';
+    } catch (error) {
+      if (error instanceof Error && error.message === ALREADY_REPORTED) return 'already_reported';
+      console.error('Could not report post:', error);
+      throw error;
+    }
+  }
+
+  return { location, posts, photos, seating, loading, vote, removePost, report };
 }

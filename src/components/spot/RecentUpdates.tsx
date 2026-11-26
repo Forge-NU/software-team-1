@@ -14,10 +14,11 @@ interface RecentUpdatesProps {
   posts: PostWithVotes[];
   seating: SeatingInfo[];
   onVote: (postId: number, vote: 1 | -1) => void;
-  /** The signed-in user. Only their own updates can be swiped to delete. */
+  /** The signed-in user. Only their own updates can be swiped to delete, and Report is hidden on them. */
   currentUserId: string | null;
   onDelete: (postId: number) => Promise<void>;
   onOpenPhoto: (photoId: number) => void;
+  onReport: (postId: number) => void;
 }
 
 /** All updates, newest first. Says so when none are recent, and labels older ones outdated. */
@@ -28,6 +29,7 @@ export default function RecentUpdates({
   currentUserId,
   onDelete,
   onOpenPhoto,
+  onReport,
 }: RecentUpdatesProps) {
   const hasFreshPosts = posts.some((post) => !isStale(post.created_at));
 
@@ -54,6 +56,7 @@ export default function RecentUpdates({
             outletLevel={outletLevelForPost(seating, post)}
             onVote={onVote}
             onOpenPhoto={onOpenPhoto}
+            onReport={post.user_id === currentUserId ? undefined : onReport}
           />
         </SwipeToDelete>
       ))}

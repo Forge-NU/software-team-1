@@ -19,6 +19,8 @@ interface UpdateCardProps {
   onVote: (postId: number, vote: 1 | -1) => void;
   /** Opens the spot's photo gallery at this photo. */
   onOpenPhoto: (photoId: number) => void;
+  /** Leave off to hide Report, e.g. on your own update */
+  onReport?: (postId: number) => void;
 }
 
 const VOTE_STYLES = {
@@ -53,7 +55,7 @@ function VoteButton({ direction, count, active, onPress }: VoteButtonProps) {
 }
 
 /**
- * One check-in update: who posted, how busy it was, its photo, and vote buttons.
+ * One check-in update: who posted, how busy it was, its photo, vote buttons and Report.
  * Tapping the photo opens it in the spot's gallery.
  */
 export default function UpdateCard({
@@ -61,6 +63,7 @@ export default function UpdateCard({
   outletLevel,
   onVote,
   onOpenPhoto,
+  onReport,
 }: UpdateCardProps) {
   const author = post.author_name || 'Anonymous';
   const { myVote, upvotes, downvotes } = post.votes;
@@ -130,6 +133,18 @@ export default function UpdateCard({
           active={myVote === -1}
           onPress={() => onVote(post.post_id, -1)}
         />
+
+        {onReport && (
+          <Pressable
+            onPress={() => onReport(post.post_id)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Report update from ${author}`}
+            style={styles.reportButton}
+          >
+            <Text style={styles.reportText}>Report</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -207,5 +222,12 @@ const styles = StyleSheet.create({
   },
   voteText: {
     ...typography.label,
+  },
+  reportButton: {
+    marginLeft: 'auto',
+  },
+  reportText: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
 });
