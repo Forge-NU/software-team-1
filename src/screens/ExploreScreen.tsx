@@ -1,6 +1,7 @@
 
 import { Feather } from '@expo/vector-icons';
 import {
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -20,7 +21,6 @@ import { toExploreFilters } from '../lib/filterAdapter';
 import { NU_CAMPUS } from '../lib/exploreSource';
 
 type ExploreScreenProps = {
-    onOpenFilters?: () => void;
     onOpenSearch?: () => void;
     onOpenSpot: (locationId: number) => void;
     latitude?: number;
@@ -31,7 +31,6 @@ type ExploreScreenProps = {
 const MAP_HEIGHT = 220;
 
 export default function ExploreScreen({
-    onOpenFilters,
     onOpenSpot,
     onOpenSearch,
     latitude = NU_CAMPUS.latitude,
@@ -82,52 +81,46 @@ export default function ExploreScreen({
                     onLocationPress={(spot) => onOpenSpot(spot.location_id)}
                 />
             </View>
-            {/* Filters button and active filter chips */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.chipRow}
-                contentContainerStyle={styles.chipRowContent}
-            >
-                <TouchableOpacity
-                    style={styles.filtersButton}
-                    onPress={onOpenFilters}
-                    accessibilityRole="button"
+            {activeChips.length > 0 && (
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.chipRow}
+                    contentContainerStyle={styles.chipRowContent}
                 >
-                    <Text style={styles.filtersButtonText}>
-                        Filters
-                        {activeChips.length > 0
-                            ? ` (${activeChips.length})`
-                            : ''}
-                    </Text>
-                </TouchableOpacity>
+                    {activeChips.map((chip) => (
+                        <TouchableOpacity
+                            key={chip.key}
+                            style={styles.activeChip}
+                            onPress={() => removeChip(chip.key)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove ${chip.label} filter`}
+                        >
+                            <Text style={styles.activeChipText}>
+                                {chip.label}
+                            </Text>
+                            {/* Icon, since "×" sits low in this font */}
+                            <Feather
+                                name="x"
+                                size={12}
+                                color={colors.textOnPrimaryLight}
+                            />
+                        </TouchableOpacity>
+                    ))}
 
-                {activeChips.map((chip) => (
-                    <TouchableOpacity
-                        key={chip.key}
-                        style={styles.activeChip}
-                        onPress={() => removeChip(chip.key)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${chip.label} filter`}
-                    >
-                        <Text style={styles.activeChipText}>
-                            ✓ {chip.label} ×
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-
-                {activeChips.length > 1 && (
-                    <TouchableOpacity
-                        style={styles.clearButton}
-                        onPress={clearAll}
-                        accessibilityRole="button"
-                    >
-                        <Text style={styles.clearButtonText}>
-                            Clear all
-                        </Text>
-                    </TouchableOpacity>
-                )}
-            </ScrollView>
+                    {activeChips.length > 1 && (
+                        <TouchableOpacity
+                            style={styles.clearButton}
+                            onPress={clearAll}
+                            accessibilityRole="button"
+                        >
+                            <Text style={styles.clearButtonText}>
+                                Clear all
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                </ScrollView>
+            )}
 
             {/* Filters B-5 can't apply yet */}
             {unsupported.length > 0 && (
@@ -206,21 +199,10 @@ const styles = StyleSheet.create({
         paddingVertical: spacing.sm,
     },
 
-    filtersButton: {
-        borderRadius: radius.pill,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.xs,
-    },
-
-    filtersButtonText: {
-        ...typography.captionStrong,
-        color: colors.textPrimary,
-    },
-
     activeChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xxs,
         borderRadius: radius.pill,
         paddingHorizontal: spacing.sm,
         paddingVertical: spacing.xs,
@@ -231,6 +213,10 @@ const styles = StyleSheet.create({
 
     activeChipText: {
         ...typography.tag,
+        // tag's lineHeight is shorter than Afacad's glyphs, which pushes them above the X icon
+        lineHeight: 16,
+        // Afacad also sits a little high on iOS
+        ...Platform.select({ ios: { transform: [{ translateY: 1 }] }, default: {} }),
         color: colors.textOnPrimaryLight,
     },
 
