@@ -115,6 +115,7 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
     if (f.groupStudy && !row.seating_area.some((s) => s.capacity_id >= GROUP_CAPACITY_ID || s.seat_type === 'study_room')) continue
     if (f.chargers && !row.seating_area.some((s) => s.outlet_level_id >= CHARGERS_OUTLET_LEVEL_ID)) continue
 
+    // TODO: Find all "current" posts and use the most rated items, or last rated if no current
     const post = latest(row.post.filter((p) => Date.parse(p.created_at) <= now), (p) => p.created_at)
     const age = post ? now - Date.parse(post.created_at) : Infinity
     const current = post && age < windowMs ? post : null
@@ -142,10 +143,10 @@ export function rankSpots(rows: LocationRow[], opts: RankOptions): ExploreSpot[]
       city: row.address?.city ?? null,
       distance_meters: distance,
       is_current: current != null,
-      crowd_level_id: current?.crowd_level_id ?? null,
-      crowd_level: current?.crowd_level?.label ?? null,
-      noise_level_id: current?.noise_level_id ?? null,
-      noise_level: current?.noise_level?.label ?? null,
+      crowd_level_id: post?.crowd_level_id ?? null,
+      crowd_level: post?.crowd_level?.label ?? null,
+      noise_level_id: post?.noise_level_id ?? null,
+      noise_level: post?.noise_level?.label ?? null,
       last_updated_at: post?.created_at ?? null,
       latest_photo_path: photo?.storage_path ?? null,
       latest_photo_url: null,
