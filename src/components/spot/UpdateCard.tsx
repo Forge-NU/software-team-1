@@ -16,13 +16,16 @@ interface UpdateCardProps {
   post: PostWithVotes;
   outletLevel: number | null;
   onVote: (postId: number, vote: 1 | -1) => void;
+  /** Leave off to hide Report, e.g. on your own update */
+  onReport?: (postId: number) => void;
 }
 
-/** One check-in update: who posted, how busy it was, and its vote buttons. */
+/** One check-in update: who posted, how busy it was, its vote buttons and Report. */
 export default function UpdateCard({
   post,
   outletLevel,
   onVote,
+  onReport,
 }: UpdateCardProps) {
   return (
     <View style={styles.card}>
@@ -85,6 +88,18 @@ export default function UpdateCard({
             ↓ {post.votes.downvotes}
           </Text>
         </Pressable>
+
+        {onReport && (
+          <Pressable
+            onPress={() => onReport(post.post_id)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Report update from ${post.author_name || 'Anonymous'}`}
+            style={styles.reportButton}
+          >
+            <Text style={styles.reportText}>Report</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -135,5 +150,12 @@ const styles = StyleSheet.create({
   },
   activeVoteText: {
     color: colors.primaryDark,
+  },
+  reportButton: {
+    marginLeft: 'auto',
+  },
+  reportText: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
 });

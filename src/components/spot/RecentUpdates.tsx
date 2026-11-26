@@ -13,6 +13,9 @@ interface RecentUpdatesProps {
   posts: PostWithVotes[];
   seating: SeatingInfo[];
   onVote: (postId: number, vote: 1 | -1) => void;
+  onReport: (postId: number) => void;
+  /** The signed-in user, so Report is hidden on their own updates */
+  myUserId?: string;
 }
 
 /** All updates, newest first. Says so when none are recent, and labels older ones outdated. */
@@ -20,6 +23,8 @@ export default function RecentUpdates({
   posts,
   seating,
   onVote,
+  onReport,
+  myUserId,
 }: RecentUpdatesProps) {
   const hasFreshPosts = posts.some((post) => !isStale(post.created_at));
 
@@ -41,6 +46,7 @@ export default function RecentUpdates({
           post={post}
           outletLevel={outletLevelForPost(seating, post)}
           onVote={onVote}
+          onReport={post.user_id === myUserId ? undefined : onReport}
         />
       ))}
     </View>

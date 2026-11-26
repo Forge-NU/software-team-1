@@ -12,6 +12,9 @@ export interface OpenFlag {
   report_count: number
 }
 
+/** The error message when the user has already reported this target */
+export const ALREADY_REPORTED = 'You already reported this.'
+
 /** Report a post. One report per user per post. */
 export async function reportPost(postId: number, reason: string): Promise<number> {
   const { data: { user } } = await supabase.auth.getUser()
@@ -27,7 +30,7 @@ export async function reportPost(postId: number, reason: string): Promise<number
     .single()
 
   if (error) {
-    if (error.code === '23505') throw new Error('You already reported this.')
+    if (error.code === '23505') throw new Error(ALREADY_REPORTED)
     throw error
   }
   return Number(data.flag_id)
