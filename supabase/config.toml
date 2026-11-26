@@ -397,6 +397,10 @@ deno_version = 2
 [functions.delete-account]
 verify_jwt = true
 
+# Called by the daily cron job with CRON_SECRET (not a JWT); the function checks it itself.
+[functions.cleanup-orphaned-photos]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
