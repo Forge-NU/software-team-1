@@ -77,7 +77,7 @@ export default function ProfileScreen({
       if (!profile) return
       if (showSpinner) setRefreshing(true)
       try {
-        setCheckIns(await getMyCheckIns(profile.userId))
+        setCheckIns((await getMyCheckIns()).checkIns)
         setLoadError(null)
       } catch {
         // A quiet refresh keeps the old list; only say so if nothing is shown or the user asked
